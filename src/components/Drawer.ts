@@ -1,4 +1,4 @@
-export type DrawerMenu = "dashboard" | "courses";
+export type DrawerMenu = "dashboard" | "courses" | "profile";
 
 export interface DrawerProps {
   appName: string;
@@ -12,7 +12,7 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    .replace(/\x22/g, "&quot;");
 }
 
 export function renderDrawer(props: DrawerProps): string {
@@ -87,6 +87,18 @@ export function renderDrawer(props: DrawerProps): string {
             }"
           >
             <span>Mata Kuliah</span>
+          </button>
+
+          <button
+            type="button"
+            data-menu="profile"
+            class="drawer-item-btn flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition cursor-pointer ${
+              activeMenu === "profile"
+                ? "bg-red-50 font-semibold text-red-600"
+                : "text-slate-700 hover:bg-slate-100"
+            }"
+          >
+            <span>Profil</span>
           </button>
         </nav>
       </div>
