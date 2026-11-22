@@ -7,12 +7,20 @@ import {
 import {
   renderChangePasswordModal,
   openChangePasswordModal,
+  closeChangePasswordModal,
   bindChangePasswordModalEvents,
   type ChangePasswordPayload,
 } from "./components/ChangePasswordModal";
+import {
+  renderAlertPopup,
+  showAlertPopup,
+  bindAlertPopupEvents,
+} from "./components/AlertPopup";
 import type { Student } from "./main";
 
 export type { ChangePasswordPayload };
+
+const CHANGE_PASSWORD_CONFIRM_ID = "changePasswordConfirmPopup";
 
 export interface ProfilePageState {
   isEditing: boolean;
@@ -109,10 +117,19 @@ export function renderProfilePage(student: Student, state: ProfilePageState): st
     </section>
 
     ${renderChangePasswordModal()}
+    ${renderAlertPopup({
+      id: CHANGE_PASSWORD_CONFIRM_ID,
+      title: "Konfirmasi Ganti Password",
+      message: "Apakah kamu yakin ingin mengubah password akun sekarang?",
+      confirmLabel: "Ya, Ganti Password",
+      cancelLabel: "Batal",
+    })}
   `;
 }
 
 export function bindProfilePageEvents(actions: ProfilePageActions): void {
+  let pendingPayload: ChangePasswordPayload | null = null;
+
   bindPageHeaderEvents(() => {
     actions.onChangeState((prev) => ({ isEditing: !prev.isEditing }));
   });
@@ -125,12 +142,29 @@ export function bindProfilePageEvents(actions: ProfilePageActions): void {
     },
   });
 
-  document
-    .getElementById("openChangePasswordBtn")
-    ?.addEventListener("click", () => openChangePasswordModal());
+  document.getElementById("openChangePasswordBtn")?.addEventListener("click", () => {
+    pendingPayload = null;
+    openChangePasswordModal();
+  });
 
   bindChangePasswordModalEvents({
     onVerifyOldPassword: actions.onVerifyOldPassword,
-    onConfirmChange: actions.onConfirmChangePassword,
+    onRequestConfirm: (payload) => {
+      pendingPayload = payload;
+      showAlertPopup(CHANGE_PASSWORD_CONFIRM_ID);
+    },
+  });
+
+  bindAlertPopupEvents(CHANGE_PASSWORD_CONFIRM_ID, {
+    onConfirm: () => {
+      if (!pendingPayload) return;
+      actions.onConfirmChangePassword(pendingPayload);
+      pendingPayload = null;
+      closeChangePasswordModal();
+      document.getElementById("passwordUpdatedFeedback")?.classList.remove("hidden");
+    },
+    onCancel: () => {
+      pendingPayload = null;
+    },
   });
 }
