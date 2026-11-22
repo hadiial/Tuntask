@@ -23,6 +23,10 @@ export type SortField = "deadline" | "createdAt" | "title";
 export type QuickCardFilter = "ALL" | "PENDING" | "H7_DEADLINE" | "COMPLETED";
 export type AuthScreen = "login" | "register";
 
+type PendingTaskAction =
+  | { type: "toggle"; taskId: string }
+  | { type: "delete"; taskId: string };
+
 export interface Student {
   id: number;
   nim: string;
@@ -92,6 +96,7 @@ export class DataCollection<T extends { id: string | number }> {
 const APP_NAME: string = import.meta.env.VITE_APP_NAME || "Tuntask";
 const APP_VERSION: string = import.meta.env.VITE_APP_VERSION || "1.0.0";
 const LOGOUT_CONFIRM_ID = "logoutConfirmPopup";
+const TASK_CONFIRM_ID = "taskActionConfirmPopup";
 
 const todayStr = getTodayDateString();
 
@@ -211,6 +216,7 @@ let createdFilter: CreatedFilter = "ALL";
 let deadlineFilter: DeadlineFilter = "ALL";
 let sortField: SortField = "deadline";
 let editingTaskId: string | null = null;
+let pendingTaskAction: PendingTaskAction | null = null;
 
 // State halaman Mata Kuliah & Profil
 let coursePageState: CoursePageState = createInitialCoursePageState();
@@ -459,19 +465,50 @@ function saveTask(values: TaskFormValues): void {
   renderView();
 }
 
-function toggleTaskStatus(taskId: string): void {
-  taskCollection.setAll(
-    taskCollection.getAll().map((item) =>
-      item.id === taskId
-        ? { ...item, status: item.status === "Selesai" ? "Belum Selesai" : "Selesai" }
-        : item
-    )
+function requestToggleTaskStatus(taskId: string): void {
+  const target = taskCollection.findById(taskId);
+  if (!target) return;
+
+  const isReopening = target.status === "Selesai";
+  pendingTaskAction = { type: "toggle", taskId };
+
+  showAlertPopup(
+    TASK_CONFIRM_ID,
+    isReopening
+      ? `Apakah kamu yakin ingin membuka kembali tugas "${target.task_title}"?`
+      : `Apakah kamu yakin ingin menandai tugas "${target.task_title}" sebagai selesai?`
   );
-  renderView();
 }
 
-function deleteTask(taskId: string): void {
-  taskCollection.setAll(taskCollection.getAll().filter((item) => item.id !== taskId));
+function requestDeleteTask(taskId: string): void {
+  const target = taskCollection.findById(taskId);
+  if (!target) return;
+
+  pendingTaskAction = { type: "delete", taskId };
+  showAlertPopup(
+    TASK_CONFIRM_ID,
+    `Apakah kamu yakin ingin menghapus tugas "${target.task_title}"?`
+  );
+}
+
+function executePendingTaskAction(): void {
+  if (!pendingTaskAction) return;
+
+  if (pendingTaskAction.type === "toggle") {
+    const targetId = pendingTaskAction.taskId;
+    taskCollection.setAll(
+      taskCollection.getAll().map((item) =>
+        item.id === targetId
+          ? { ...item, status: item.status === "Selesai" ? "Belum Selesai" : "Selesai" }
+          : item
+      )
+    );
+  } else if (pendingTaskAction.type === "delete") {
+    const targetId = pendingTaskAction.taskId;
+    taskCollection.setAll(taskCollection.getAll().filter((item) => item.id !== targetId));
+  }
+
+  pendingTaskAction = null;
   renderView();
 }
 
@@ -557,6 +594,13 @@ function renderDashboardBody(): string {
     })}
 
     ${renderTaskModal(courseNames)}
+    ${renderAlertPopup({
+      id: TASK_CONFIRM_ID,
+      title: "Konfirmasi Aksi Tugas",
+      message: "Apakah kamu yakin ingin melanjutkan aksi pada tugas ini?",
+      confirmLabel: "Ya, Lanjutkan",
+      cancelLabel: "Batal",
+    })}
   `;
 }
 
@@ -745,9 +789,9 @@ function attachAppListeners(): void {
         sortField = "deadline";
         renderView();
       },
-      onToggleTask: toggleTaskStatus,
+      onToggleTask: requestToggleTaskStatus,
       onEditTask: (id) => openTaskModal(id),
-      onDeleteTask: deleteTask,
+      onDeleteTask: requestDeleteTask,
     });
 
     bindTaskModalEvents({
@@ -756,6 +800,13 @@ function attachAppListeners(): void {
         hideTaskModal();
       },
       onSubmit: saveTask,
+    });
+
+    bindAlertPopupEvents(TASK_CONFIRM_ID, {
+      onConfirm: executePendingTaskAction,
+      onCancel: () => {
+        pendingTaskAction = null;
+      },
     });
   } else if (activeMenu === "courses") {
     bindCoursePageEvents(courseCollection.getAll(), coursePageState, {
