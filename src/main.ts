@@ -2,26 +2,14 @@ import "./style.css";
 import { renderDrawer, bindDrawerEvents, type DrawerMenu } from "./components/Drawer";
 import { renderTopBar, bindTopBarEvents } from "./components/TopBar";
 import { renderPageHeader, bindPageHeaderEvents } from "./components/PageHeader";
-import {
-  renderStatCardsGrid,
-  bindStatCardsEvents,
-  type StatCardItem,
-} from "./components/StatCard";
-import {
-  renderTaskTable,
-  bindTaskTableEvents,
-  type TaskRowItem,
-} from "./components/TaskTable";
-import {
-  renderTaskModal,
-  showTaskModal,
-  hideTaskModal,
-  bindTaskModalEvents,
-  type TaskFormValues,
-} from "./components/TaskModal";
+import { renderStatCardsGrid, bindStatCardsEvents, type StatCardItem,} from "./components/StatCard";
+import { renderTaskTable, bindTaskTableEvents, type TaskRowItem,} from "./components/TaskTable";
+import { renderTaskModal, showTaskModal, hideTaskModal, bindTaskModalEvents, type TaskFormValues,} from "./components/TaskModal";
+import { renderCoursePage, bindCoursePageEvents, createInitialCoursePageState, type CoursePageState,} from "./course";
+import type { CourseFormValues } from "./components/CourseModal";
 
 // ==========================================
-// 1. TIPE DATA TYPESCRIPT (Sesuai Skema MySQL & Syarat Poin 4)
+// TIPE DATA TYPESCRIPT
 // ==========================================
 
 export type TaskStatus = "Belum Selesai" | "Selesai";
@@ -66,7 +54,6 @@ export interface DashboardSummary {
   uncompleted: number;
   dueSoonH7: number;
   completed: number;
-  hasUrgentTasks: boolean;
 }
 
 export class DataCollection<T extends { id: string | number }> {
@@ -90,7 +77,7 @@ export class DataCollection<T extends { id: string | number }> {
 }
 
 // ==========================================
-// 2. ENVIRONMENT VARIABLES & STATE IN-MEMORY
+// ENVIRONMENT VARIABLES & STATE IN-MEMORY
 // ==========================================
 
 const APP_NAME: string = import.meta.env.VITE_APP_NAME || "Tuntask";
@@ -192,15 +179,20 @@ const taskCollection = new DataCollection<TaskRecord>(SEED_TASKS);
 
 let isDrawerOpen = true;
 let activeMenu: DrawerMenu = "dashboard";
+
+// State halaman Dashboard
 let activeCardFilter: QuickCardFilter = "ALL";
 let searchKeyword = "";
 let createdFilter: CreatedFilter = "ALL";
 let deadlineFilter: DeadlineFilter = "ALL";
 let sortField: SortField = "deadline";
-let editingId: string | null = null;
+let editingTaskId: string | null = null;
+
+// State halaman Mata Kuliah
+let coursePageState: CoursePageState = createInitialCoursePageState();
 
 // ==========================================
-// 3. HELPER TANGGAL, DEADLINE H-7 & TRANSFORM DATA
+// HELPER TANGGAL, DEADLINE H-7 & TRANSFORM DATA
 // ==========================================
 
 function getTodayDateString(): string {
@@ -231,22 +223,16 @@ function isDueWithinH7(task: TaskRecord): boolean {
   return daysLeft >= 0 && daysLeft <= 7;
 }
 
-function computeSummary(tasks: TaskRecord[]): DashboardSummary {
-  const total = tasks.length;
-  const completed = tasks.filter((t) => t.status === "Selesai").length;
-  const uncompleted = tasks.filter((t) => t.status === "Belum Selesai").length;
-  const dueSoonH7 = tasks.filter((t) => isDueWithinH7(t)).length;
-
+function computeDashboardSummary(tasks: TaskRecord[]): DashboardSummary {
   return {
-    total,
-    uncompleted,
-    dueSoonH7,
-    completed,
-    hasUrgentTasks: dueSoonH7 > 0,
+    total: tasks.length,
+    uncompleted: tasks.filter((t) => t.status === "Belum Selesai").length,
+    dueSoonH7: tasks.filter((t) => isDueWithinH7(t)).length,
+    completed: tasks.filter((t) => t.status === "Selesai").length,
   };
 }
 
-function buildStatCards(summary: DashboardSummary): StatCardItem[] {
+function buildDashboardCards(summary: DashboardSummary): StatCardItem[] {
   return [
     {
       id: "ALL",
@@ -345,11 +331,11 @@ function getFilteredTaskRows(): TaskRowItem[] {
 }
 
 // ==========================================
-// 4. CRUD TUGAS DI MEMORY FRONTEND
+// CRUD TUGAS & MATA KULIAH DI MEMORY
 // ==========================================
 
 function openTaskModal(taskId?: string): void {
-  editingId = taskId ?? null;
+  editingTaskId = taskId ?? null;
   const existing = taskId ? taskCollection.findById(taskId) : undefined;
   const today = getTodayDateString();
 
@@ -384,36 +370,38 @@ function openTaskModal(taskId?: string): void {
   }
 }
 
-function resolveCourseId(courseName: string): number {
+function resolveCourseRecord(courseName: string): Course {
   const matched = courseCollection
     .getAll()
     .find((c) => c.course_name.toLowerCase() === courseName.toLowerCase());
-  if (matched) return matched.id;
+  if (matched) return matched;
 
+  const nextId =
+    courseCollection.getAll().reduce((max, item) => Math.max(max, item.id), 0) + 1;
   const newCourse: Course = {
-    id: courseCollection.getAll().length + 1,
+    id: nextId,
     course_name: courseName,
     course_code: null,
     lecturer_name: null,
     semester: "2026 Ganjil",
   };
   courseCollection.setAll([...courseCollection.getAll(), newCourse]);
-  return newCourse.id;
+  return newCourse;
 }
 
 function saveTask(values: TaskFormValues): void {
-  const course_id = resolveCourseId(values.course_name);
+  const course = resolveCourseRecord(values.course_name);
   const currentList = taskCollection.getAll();
   const autoCreatedAt = getTodayDateString();
 
-  if (editingId) {
+  if (editingTaskId) {
     taskCollection.setAll(
       currentList.map((item) =>
-        item.id === editingId
+        item.id === editingTaskId
           ? {
               ...item,
-              course_id,
-              course_name: values.course_name,
+              course_id: course.id,
+              course_name: course.course_name,
               task_title: values.task_title,
               task_desc: values.task_desc,
               assigned_date: values.assigned_date,
@@ -428,8 +416,8 @@ function saveTask(values: TaskFormValues): void {
     const newTask: TaskRecord = {
       id: `task-${Date.now()}`,
       student_id: CURRENT_STUDENT.id,
-      course_id,
-      course_name: values.course_name,
+      course_id: course.id,
+      course_name: course.course_name,
       task_title: values.task_title,
       task_desc: values.task_desc,
       assigned_date: values.assigned_date,
@@ -441,7 +429,7 @@ function saveTask(values: TaskFormValues): void {
     taskCollection.setAll([newTask, ...currentList]);
   }
 
-  editingId = null;
+  editingTaskId = null;
   hideTaskModal();
   renderView();
 }
@@ -462,18 +450,99 @@ function deleteTask(taskId: string): void {
   renderView();
 }
 
+function saveCourse(values: CourseFormValues, editingCourseId: number | null): void {
+  const currentCourses = courseCollection.getAll();
+  const normalizedCode = values.course_code || null;
+  const normalizedLecturer = values.lecturer_name || null;
+
+  if (editingCourseId !== null) {
+    courseCollection.setAll(
+      currentCourses.map((item) =>
+        item.id === editingCourseId
+          ? {
+              ...item,
+              course_name: values.course_name,
+              course_code: normalizedCode,
+              lecturer_name: normalizedLecturer,
+              semester: values.semester,
+            }
+          : item
+      )
+    );
+
+    taskCollection.setAll(
+      taskCollection.getAll().map((task) =>
+        task.course_id === editingCourseId
+          ? { ...task, course_name: values.course_name }
+          : task
+      )
+    );
+  } else {
+    const nextId =
+      currentCourses.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+    const newCourse: Course = {
+      id: nextId,
+      course_name: values.course_name,
+      course_code: normalizedCode,
+      lecturer_name: normalizedLecturer,
+      semester: values.semester,
+    };
+    courseCollection.setAll([...currentCourses, newCourse]);
+  }
+
+  renderView();
+}
+
+function deleteCourse(courseId: number): void {
+  courseCollection.setAll(
+    courseCollection.getAll().filter((item) => item.id !== courseId)
+  );
+  renderView();
+}
+
 // ==========================================
-// 5. RENDER & EVENT BINDING
+// RENDER & EVENT BINDING
 // ==========================================
+
+function renderDashboardBody(): string {
+  const summary = computeDashboardSummary(taskCollection.getAll());
+  const statCards = buildDashboardCards(summary);
+  const taskRows = getFilteredTaskRows();
+  const courseNames = courseCollection.getAll().map((c) => c.course_name);
+
+  return `
+    ${renderPageHeader({
+      title: "Dashboard",
+      subtitle: `${CURRENT_STUDENT.major} — ${CURRENT_STUDENT.university}`,
+      actionLabel: "+ Tambah Tugas",
+    })}
+
+    ${renderStatCardsGrid(statCards)}
+
+    ${renderTaskTable({
+      rows: taskRows,
+      searchKeyword,
+      createdFilter,
+      deadlineFilter,
+      sortField,
+    })}
+
+    ${renderTaskModal(courseNames)}
+  `;
+}
 
 function renderView(): void {
   const root = document.querySelector<HTMLDivElement>("#app");
   if (!root) return;
 
-  const summary = computeSummary(taskCollection.getAll());
-  const statCards = buildStatCards(summary);
-  const taskRows = getFilteredTaskRows();
-  const courseNames = courseCollection.getAll().map((c) => c.course_name);
+  const pageBody =
+    activeMenu === "dashboard"
+      ? renderDashboardBody()
+      : renderCoursePage(
+          courseCollection.getAll(),
+          taskCollection.getAll(),
+          coursePageState
+        );
 
   root.innerHTML = `
     <div class="flex min-h-screen bg-slate-50 text-slate-800">
@@ -493,26 +562,10 @@ function renderView(): void {
         })}
 
         <main class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6">
-          ${renderPageHeader({
-            title: "Dashboard",
-            subtitle: `${CURRENT_STUDENT.major} — ${CURRENT_STUDENT.university}`,
-            actionLabel: "+ Tambah Tugas",
-          })}
-
-          ${renderStatCardsGrid(statCards)}
-
-          ${renderTaskTable({
-            rows: taskRows,
-            searchKeyword,
-            createdFilter,
-            deadlineFilter,
-            sortField,
-          })}
+          ${pageBody}
         </main>
       </div>
     </div>
-
-    ${renderTaskModal(courseNames)}
   `;
 
   attachListeners();
@@ -531,7 +584,6 @@ function attachListeners(): void {
     },
     onSelectMenu: (menu) => {
       activeMenu = menu;
-      activeCardFilter = "ALL";
       if (window.innerWidth < 1024) {
         isDrawerOpen = false;
       }
@@ -539,54 +591,65 @@ function attachListeners(): void {
     },
   });
 
-  bindPageHeaderEvents(() => openTaskModal());
+  if (activeMenu === "dashboard") {
+    bindPageHeaderEvents(() => openTaskModal());
 
-  bindStatCardsEvents<QuickCardFilter>((filter) => {
-    activeCardFilter = filter;
-    renderView();
-  });
+    bindStatCardsEvents<QuickCardFilter>((filter) => {
+      activeCardFilter = filter;
+      renderView();
+    });
 
-  bindTaskTableEvents({
-    onSearchChange: (keyword) => {
-      searchKeyword = keyword;
-      renderView();
-    },
-    onCreatedFilterChange: (value) => {
-      createdFilter = value as CreatedFilter;
-      renderView();
-    },
-    onDeadlineFilterChange: (value) => {
-      deadlineFilter = value as DeadlineFilter;
-      renderView();
-    },
-    onSortFieldChange: (value) => {
-      sortField = value as SortField;
-      renderView();
-    },
-    onResetFilters: () => {
-      activeCardFilter = "ALL";
-      searchKeyword = "";
-      createdFilter = "ALL";
-      deadlineFilter = "ALL";
-      sortField = "deadline";
-      renderView();
-    },
-    onToggleTask: toggleTaskStatus,
-    onEditTask: (id) => openTaskModal(id),
-    onDeleteTask: deleteTask,
-  });
+    bindTaskTableEvents({
+      onSearchChange: (keyword) => {
+        searchKeyword = keyword;
+        renderView();
+      },
+      onCreatedFilterChange: (value) => {
+        createdFilter = value as CreatedFilter;
+        renderView();
+      },
+      onDeadlineFilterChange: (value) => {
+        deadlineFilter = value as DeadlineFilter;
+        renderView();
+      },
+      onSortFieldChange: (value) => {
+        sortField = value as SortField;
+        renderView();
+      },
+      onResetFilters: () => {
+        activeCardFilter = "ALL";
+        searchKeyword = "";
+        createdFilter = "ALL";
+        deadlineFilter = "ALL";
+        sortField = "deadline";
+        renderView();
+      },
+      onToggleTask: toggleTaskStatus,
+      onEditTask: (id) => openTaskModal(id),
+      onDeleteTask: deleteTask,
+    });
 
-  bindTaskModalEvents({
-    onClose: () => {
-      editingId = null;
-      hideTaskModal();
-    },
-    onSubmit: saveTask,
-  });
+    bindTaskModalEvents({
+      onClose: () => {
+        editingTaskId = null;
+        hideTaskModal();
+      },
+      onSubmit: saveTask,
+    });
+  } else {
+    bindCoursePageEvents(courseCollection.getAll(), coursePageState, {
+      onChangeState: (updater) => {
+        coursePageState = updater(coursePageState);
+        renderView();
+      },
+      onAddCourse: saveCourse,
+      onDeleteCourse: deleteCourse,
+    });
+  }
 }
 
 // ==========================================
-// 6. STARTUP
+// STARTUP
 // ==========================================
 
 renderView();
