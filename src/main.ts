@@ -7,6 +7,9 @@ import { renderTaskTable, bindTaskTableEvents, type TaskRowItem,} from "./compon
 import { renderTaskModal, showTaskModal, hideTaskModal, bindTaskModalEvents, type TaskFormValues,} from "./components/TaskModal";
 import { renderCoursePage, bindCoursePageEvents, createInitialCoursePageState, type CoursePageState,} from "./course";
 import { renderProfilePage, bindProfilePageEvents, createInitialProfilePageState, type ProfilePageState,} from "./profile";
+import { renderLoginPage, bindLoginPageEvents } from "./login";
+import { renderRegisterPage, bindRegisterPageEvents } from "./register";
+import { renderAlertPopup, showAlertPopup, bindAlertPopupEvents,} from "./components/AlertPopup";
 import type { CourseFormValues } from "./components/CourseModal";
 
 // ==========================================
@@ -18,6 +21,7 @@ export type CreatedFilter = "ALL" | "TODAY" | "LAST_7_DAYS" | "LAST_30_DAYS";
 export type DeadlineFilter = "ALL" | "H7_SOON" | "OVERDUE" | "TODAY";
 export type SortField = "deadline" | "createdAt" | "title";
 export type QuickCardFilter = "ALL" | "PENDING" | "H7_DEADLINE" | "COMPLETED";
+export type AuthScreen = "login" | "register";
 
 export interface Student {
   id: number;
@@ -26,6 +30,10 @@ export interface Student {
   major: string;
   faculty: string;
   university: string;
+}
+
+interface UserAccount extends Student {
+  password: string;
 }
 
 export interface Course {
@@ -77,24 +85,37 @@ export class DataCollection<T extends { id: string | number }> {
   }
 }
 
-let currentPassword = "12345678";
-
 // ==========================================
 // ENVIRONMENT VARIABLES & STATE IN-MEMORY
 // ==========================================
 
 const APP_NAME: string = import.meta.env.VITE_APP_NAME || "Tuntask";
 const APP_VERSION: string = import.meta.env.VITE_APP_VERSION || "1.0.0";
+const LOGOUT_CONFIRM_ID = "logoutConfirmPopup";
 
 const todayStr = getTodayDateString();
 
+let accounts: UserAccount[] = [
+  {
+    id: 1,
+    nim: "1247050065",
+    full_name: "Salman Hadi Al Ghifari",
+    major: "Teknik Informatika",
+    faculty: "Sains dan Teknologi",
+    university: "UIN Sunan Gunung Djati Bandung",
+    password: "12345678",
+  },
+];
+
+let isAuthenticated = false;
+let authScreen: AuthScreen = "login";
 let currentStudent: Student = {
-  id: 1,
-  nim: "1247050065",
-  full_name: "Salman Hadi Al Ghifari",
-  major: "Teknik Informatika",
-  faculty: "Sains dan Teknologi",
-  university: "UIN Sunan Gunung Djati Bandung",
+  id: accounts[0].id,
+  nim: accounts[0].nim,
+  full_name: accounts[0].full_name,
+  major: accounts[0].major,
+  faculty: accounts[0].faculty,
+  university: accounts[0].university,
 };
 
 const SEED_COURSES: Course[] = [
@@ -335,7 +356,7 @@ function getFilteredTaskRows(): TaskRowItem[] {
 }
 
 // ==========================================
-// CRUD TUGAS & MATA KULIAH DI MEMORY
+// CRUD TUGAS, MATA KULIAH & AKUN DI MEMORY
 // ==========================================
 
 function openTaskModal(taskId?: string): void {
@@ -504,6 +525,10 @@ function deleteCourse(courseId: number): void {
   renderView();
 }
 
+function getActiveAccount(): UserAccount | undefined {
+  return accounts.find((acc) => acc.id === currentStudent.id);
+}
+
 // ==========================================
 // RENDER & EVENT BINDING
 // ==========================================
@@ -538,6 +563,15 @@ function renderDashboardBody(): string {
 function renderView(): void {
   const root = document.querySelector<HTMLDivElement>("#app");
   if (!root) return;
+
+  if (!isAuthenticated) {
+    root.innerHTML =
+      authScreen === "login"
+        ? renderLoginPage(APP_NAME)
+        : renderRegisterPage(APP_NAME);
+    attachAuthListeners();
+    return;
+  }
 
   let pageBody = "";
   if (activeMenu === "dashboard") {
@@ -574,12 +608,80 @@ function renderView(): void {
         </main>
       </div>
     </div>
+
+    ${renderAlertPopup({
+      id: LOGOUT_CONFIRM_ID,
+      title: "Konfirmasi Logout",
+      message: "Apakah kamu yakin ingin keluar dari akun Tuntask?",
+      confirmLabel: "Ya, Logout",
+      cancelLabel: "Batal",
+    })}
   `;
 
-  attachListeners();
+  attachAppListeners();
 }
 
-function attachListeners(): void {
+function attachAuthListeners(): void {
+  if (authScreen === "login") {
+    bindLoginPageEvents({
+      onLoginSuccess: ({ nim, password }) => {
+        const matched = accounts.find(
+          (acc) => acc.nim === nim && acc.password === password
+        );
+        if (!matched) return false;
+
+        currentStudent = {
+          id: matched.id,
+          nim: matched.nim,
+          full_name: matched.full_name,
+          major: matched.major,
+          faculty: matched.faculty,
+          university: matched.university,
+        };
+        isAuthenticated = true;
+        activeMenu = "dashboard";
+        renderView();
+        return true;
+      },
+      onGoToRegister: () => {
+        isAuthenticated = false;
+        authScreen = "register";
+        renderView();
+      },
+    });
+  } else {
+    bindRegisterPageEvents({
+      onRegisterSubmit: (payload) => {
+        const duplicate = accounts.some((acc) => acc.nim === payload.nim);
+        if (duplicate) {
+          return {
+            ok: false,
+            warning: "Peringatan: NIM sudah terdaftar. Gunakan NIM lain atau masuk ke akun.",
+          };
+        }
+
+        const nextId = accounts.reduce((max, acc) => Math.max(max, acc.id), 0) + 1;
+        const newAccount: UserAccount = {
+          id: nextId,
+          ...payload,
+        };
+        accounts = [...accounts, newAccount];
+
+        isAuthenticated = false;
+        authScreen = "login";
+        renderView();
+        return { ok: true };
+      },
+      onGoToLogin: () => {
+        isAuthenticated = false;
+        authScreen = "login";
+        renderView();
+      },
+    });
+  }
+}
+
+function attachAppListeners(): void {
   bindTopBarEvents(() => {
     isDrawerOpen = !isDrawerOpen;
     renderView();
@@ -595,6 +697,17 @@ function attachListeners(): void {
       if (window.innerWidth < 1024) {
         isDrawerOpen = false;
       }
+      renderView();
+    },
+    onLogout: () => {
+      showAlertPopup(LOGOUT_CONFIRM_ID);
+    },
+  });
+
+  bindAlertPopupEvents(LOGOUT_CONFIRM_ID, {
+    onConfirm: () => {
+      isAuthenticated = false;
+      authScreen = "login";
       renderView();
     },
   });
@@ -664,11 +777,19 @@ function attachListeners(): void {
           ...currentStudent,
           ...updated,
         };
+        accounts = accounts.map((acc) =>
+          acc.id === currentStudent.id ? { ...acc, ...updated } : acc
+        );
         renderView();
       },
-      onVerifyOldPassword: (oldPassword) => oldPassword === currentPassword,
+      onVerifyOldPassword: (oldPassword) => {
+        const active = getActiveAccount();
+        return Boolean(active && active.password === oldPassword);
+      },
       onConfirmChangePassword: ({ newPassword }) => {
-        currentPassword = newPassword;
+        accounts = accounts.map((acc) =>
+          acc.id === currentStudent.id ? { ...acc, password: newPassword } : acc
+        );
       },
     });
   }

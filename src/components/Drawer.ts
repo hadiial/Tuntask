@@ -103,8 +103,17 @@ export function renderDrawer(props: DrawerProps): string {
         </nav>
       </div>
 
-      <div class="truncate border-t border-slate-200 px-4 py-3 text-xs text-slate-400">
-        Tuntask - 2026
+      <div class="border-t border-slate-200 p-3">
+        <button
+          type="button"
+          id="logoutDrawerBtn"
+          class="mb-2 flex w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 transition cursor-pointer whitespace-nowrap"
+        >
+          Logout
+        </button>
+        <div class="truncate px-1 text-xs text-slate-400">
+          Tuntask - 2026
+        </div>
       </div>
     </aside>
   `;
@@ -113,11 +122,13 @@ export function renderDrawer(props: DrawerProps): string {
 export interface DrawerHandlers {
   onClose: () => void;
   onSelectMenu: (menu: DrawerMenu) => void;
+  onLogout: () => void;
 }
 
 export function bindDrawerEvents(handlers: DrawerHandlers): void {
   document.getElementById("closeDrawerBtn")?.addEventListener("click", handlers.onClose);
   document.getElementById("drawerBackdrop")?.addEventListener("click", handlers.onClose);
+  document.getElementById("logoutDrawerBtn")?.addEventListener("click", handlers.onLogout);
 
   document.querySelectorAll<HTMLButtonElement>(".drawer-item-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
