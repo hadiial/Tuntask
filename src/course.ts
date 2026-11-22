@@ -1,17 +1,10 @@
 import { renderPageHeader, bindPageHeaderEvents } from "./components/PageHeader";
-import {
-  renderCourseTable,
-  bindCourseTableEvents,
-  type CourseRowItem,
-} from "./components/CourseTable";
-import {
-  renderCourseModal,
-  showCourseModal,
-  hideCourseModal,
-  bindCourseModalEvents,
-  type CourseFormValues,
-} from "./components/CourseModal";
+import { renderCourseTable, bindCourseTableEvents, type CourseRowItem, } from "./components/CourseTable";
+import { renderCourseModal, showCourseModal, hideCourseModal, bindCourseModalEvents, type CourseFormValues, } from "./components/CourseModal";
+import { renderAlertPopup, showAlertPopup, bindAlertPopupEvents } from "./components/AlertPopup";
 import type { Course, TaskRecord } from "./main";
+
+const DELETE_COURSE_CONFIRM_ID = "deleteCourseConfirmPopup";
 
 export interface CoursePageState {
   searchKeyword: string;
@@ -72,6 +65,13 @@ export function renderCoursePage(
     })}
 
     ${renderCourseModal()}
+    ${renderAlertPopup({
+      id: DELETE_COURSE_CONFIRM_ID,
+      title: "Konfirmasi Hapus Mata Kuliah",
+      message: "Apakah kamu yakin ingin menghapus mata kuliah ini?",
+      confirmLabel: "Ya, Hapus",
+      cancelLabel: "Batal",
+    })}
   `;
 }
 
@@ -80,6 +80,8 @@ export function bindCoursePageEvents(
   state: CoursePageState,
   actions: CoursePageActions
 ): void {
+  let pendingDeleteCourseId: number | null = null;
+
   bindPageHeaderEvents(() => {
     actions.onChangeState((prev) => ({ ...prev, editingCourseId: null }));
     showCourseModal({
@@ -112,7 +114,26 @@ export function bindCoursePageEvents(
       });
     },
     onDeleteCourse: (id) => {
-      actions.onDeleteCourse(id);
+      const target = courses.find((c) => c.id === id);
+      pendingDeleteCourseId = id;
+      showAlertPopup(
+        DELETE_COURSE_CONFIRM_ID,
+        target
+          ? `Apakah kamu yakin ingin menghapus mata kuliah "${target.course_name}"?`
+          : "Apakah kamu yakin ingin menghapus mata kuliah ini?"
+      );
+    },
+  });
+
+  bindAlertPopupEvents(DELETE_COURSE_CONFIRM_ID, {
+    onConfirm: () => {
+      if (pendingDeleteCourseId === null) return;
+      const targetId = pendingDeleteCourseId;
+      pendingDeleteCourseId = null;
+      actions.onDeleteCourse(targetId);
+    },
+    onCancel: () => {
+      pendingDeleteCourseId = null;
     },
   });
 
