@@ -1,4 +1,4 @@
-export type DrawerMenu = "dashboard";
+export type DrawerMenu = "dashboard" | "courses";
 
 export interface DrawerProps {
   appName: string;
@@ -75,6 +75,18 @@ export function renderDrawer(props: DrawerProps): string {
             }"
           >
             <span>Dashboard</span>
+          </button>
+
+          <button
+            type="button"
+            data-menu="courses"
+            class="drawer-item-btn flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition cursor-pointer ${
+              activeMenu === "courses"
+                ? "bg-red-50 font-semibold text-red-600"
+                : "text-slate-700 hover:bg-slate-100"
+            }"
+          >
+            <span>Mata Kuliah</span>
           </button>
         </nav>
       </div>
