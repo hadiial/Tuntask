@@ -2,21 +2,36 @@ import "./style.css";
 import { renderDrawer, bindDrawerEvents, type DrawerMenu } from "./components/Drawer";
 import { renderTopBar, bindTopBarEvents } from "./components/TopBar";
 import { renderPageHeader, bindPageHeaderEvents } from "./components/PageHeader";
-import { renderStatCardsGrid, bindStatCardsEvents, type StatCardItem,} from "./components/StatCard";
-import { renderTaskTable, bindTaskTableEvents, type TaskRowItem,} from "./components/TaskTable";
-import { renderTaskModal, showTaskModal, hideTaskModal, bindTaskModalEvents, type TaskFormValues,} from "./components/TaskModal";
-import { renderCoursePage, bindCoursePageEvents, createInitialCoursePageState, type CoursePageState,} from "./course";
-import { renderProfilePage, bindProfilePageEvents, createInitialProfilePageState, type ProfilePageState,} from "./profile";
+import { renderStatCardsGrid, bindStatCardsEvents, type StatCardItem } from "./components/StatCard";
+import { renderTaskTable, bindTaskTableEvents, type TaskRowItem } from "./components/TaskTable";
+import { renderTaskModal, showTaskModal, hideTaskModal, bindTaskModalEvents, type TaskFormValues } from "./components/TaskModal";
+import { renderCoursePage, bindCoursePageEvents, createInitialCoursePageState, type CoursePageState } from "./course";
+import { renderProfilePage, bindProfilePageEvents, createInitialProfilePageState, type ProfilePageState } from "./profile";
 import { renderLoginPage, bindLoginPageEvents } from "./login";
 import { renderRegisterPage, bindRegisterPageEvents } from "./register";
-import { renderAlertPopup, showAlertPopup, bindAlertPopupEvents,} from "./components/AlertPopup";
+import { renderAlertPopup, showAlertPopup, bindAlertPopupEvents } from "./components/AlertPopup";
 import type { CourseFormValues } from "./components/CourseModal";
+import {
+  loginStudent,
+  registerStudent,
+  updateStudentProfile,
+  changeStudentPassword,
+  fetchCourses,
+  createCourse,
+  updateCourse,
+  removeCourse,
+  fetchTasks,
+  createTask,
+  updateTask,
+  updateTaskStatus,
+  removeTask,
+} from "./api";
 
 // ==========================================
 // TIPE DATA TYPESCRIPT
 // ==========================================
 
-export type TaskStatus = "Belum Selesai" | "Selesai";
+export type TaskStatus = "Belum Selesai" | "Selesai" | "Terlambat";
 export type CreatedFilter = "ALL" | "TODAY" | "LAST_7_DAYS" | "LAST_30_DAYS";
 export type DeadlineFilter = "ALL" | "H7_SOON" | "OVERDUE" | "TODAY";
 export type SortField = "deadline" | "createdAt" | "title";
@@ -24,8 +39,8 @@ export type QuickCardFilter = "ALL" | "PENDING" | "H7_DEADLINE" | "COMPLETED";
 export type AuthScreen = "login" | "register";
 
 type PendingTaskAction =
-  | { type: "toggle"; taskId: string }
-  | { type: "delete"; taskId: string };
+  | { type: "toggle"; taskId: string | number }
+  | { type: "delete"; taskId: string | number };
 
 export interface Student {
   id: number;
@@ -36,12 +51,9 @@ export interface Student {
   university: string;
 }
 
-interface UserAccount extends Student {
-  password: string;
-}
-
 export interface Course {
   id: number;
+  student_id?: number;
   course_name: string;
   course_code: string | null;
   lecturer_name: string | null;
@@ -49,7 +61,7 @@ export interface Course {
 }
 
 export interface TaskRecord {
-  id: string;
+  id: number | string;
   student_id: number;
   course_id: number;
   course_name: string;
@@ -85,126 +97,33 @@ export class DataCollection<T extends { id: string | number }> {
   }
 
   findById(id: string | number): T | undefined {
-    return this.items.find((item) => item.id === id);
+    return this.items.find((item) => String(item.id) === String(id));
   }
 }
 
 // ==========================================
-// ENVIRONMENT VARIABLES & STATE IN-MEMORY
+// ENVIRONMENT VARIABLES & STATE APLIKASI
 // ==========================================
 
 const APP_NAME: string = import.meta.env.VITE_APP_NAME || "Tuntask";
 const APP_VERSION: string = import.meta.env.VITE_APP_VERSION || "1.0.0";
 const LOGOUT_CONFIRM_ID = "logoutConfirmPopup";
 const TASK_CONFIRM_ID = "taskActionConfirmPopup";
-
-const todayStr = getTodayDateString();
-
-let accounts: UserAccount[] = [
-  {
-    id: 1,
-    nim: "1247050065",
-    full_name: "Salman Hadi Al Ghifari",
-    major: "Teknik Informatika",
-    faculty: "Sains dan Teknologi",
-    university: "UIN Sunan Gunung Djati Bandung",
-    password: "12345678",
-  },
-];
+const API_ERROR_POPUP_ID = "apiErrorPopup";
 
 let isAuthenticated = false;
 let authScreen: AuthScreen = "login";
 let currentStudent: Student = {
-  id: accounts[0].id,
-  nim: accounts[0].nim,
-  full_name: accounts[0].full_name,
-  major: accounts[0].major,
-  faculty: accounts[0].faculty,
-  university: accounts[0].university,
+  id: 0,
+  nim: "",
+  full_name: "",
+  major: "",
+  faculty: "",
+  university: "",
 };
 
-const SEED_COURSES: Course[] = [
-  {
-    id: 1,
-    course_name: "Pengembangan Aplikasi Web",
-    course_code: "IF-501",
-    lecturer_name: "Dosen Pengampu PABW",
-    semester: "2026 Ganjil",
-  },
-  {
-    id: 2,
-    course_name: "Manajemen Basis Data",
-    course_code: "IF-502",
-    lecturer_name: "Wildan Budiawan Zulfikar, S.T., M.Kom.",
-    semester: "2026 Ganjil",
-  },
-  {
-    id: 3,
-    course_name: "Jaringan Komputer",
-    course_code: "IF-503",
-    lecturer_name: "Cecep Nurul Alam, M.T.",
-    semester: "2026 Ganjil",
-  },
-];
-
-const SEED_TASKS: TaskRecord[] = [
-  {
-    id: "task-1",
-    student_id: currentStudent.id,
-    course_id: 1,
-    course_name: "Pengembangan Aplikasi Web",
-    task_title: "Implementasi CRUD TypeScript & Git Workflow",
-    task_desc:
-      "Buat aplikasi tugas kuliah di Vite + TS, minimal 5 commit, 2 branch, PR, dan merge conflict.",
-    assigned_date: "2026-11-18",
-    created_at: "2026-11-20",
-    deadline: "2026-11-25",
-    submission_link: "https://github.com/hadiial/Tuntask",
-    status: "Belum Selesai",
-  },
-  {
-    id: "task-2",
-    student_id: currentStudent.id,
-    course_id: 2,
-    course_name: "Manajemen Basis Data",
-    task_title: "Normalisasi ERD Oracle & Skema Tabel MySQL",
-    task_desc: "Susun ERD entitas students, courses, tasks lalu buat skema di MySQL.",
-    assigned_date: "2026-11-16",
-    created_at: "2026-11-17",
-    deadline: "2026-11-28",
-    submission_link: "",
-    status: "Belum Selesai",
-  },
-  {
-    id: "task-3",
-    student_id: currentStudent.id,
-    course_id: 3,
-    course_name: "Jaringan Komputer",
-    task_title: "Konfigurasi OSPF & VLAN Topologi Kampus",
-    task_desc: "Topologi multi-router dan pengujian konektivitas antar subnet.",
-    assigned_date: "2026-11-10",
-    created_at: "2026-11-12",
-    deadline: "2026-11-20",
-    submission_link: "https://drive.google.com",
-    status: "Selesai",
-  },
-  {
-    id: "task-4",
-    student_id: currentStudent.id,
-    course_id: 1,
-    course_name: "Pengembangan Aplikasi Web",
-    task_title: "Dokumentasi Compiler, Transpiler, Bundler & .env",
-    task_desc: "Tulis ringkasan teknis di halaman web pribadi untuk kelengkapan tugas.",
-    assigned_date: "",
-    created_at: todayStr,
-    deadline: "2026-12-06",
-    submission_link: "",
-    status: "Belum Selesai",
-  },
-];
-
-const courseCollection = new DataCollection<Course>(SEED_COURSES);
-const taskCollection = new DataCollection<TaskRecord>(SEED_TASKS);
+const courseCollection = new DataCollection<Course>([]);
+const taskCollection = new DataCollection<TaskRecord>([]);
 
 let isDrawerOpen = true;
 let activeMenu: DrawerMenu = "dashboard";
@@ -215,12 +134,35 @@ let searchKeyword = "";
 let createdFilter: CreatedFilter = "ALL";
 let deadlineFilter: DeadlineFilter = "ALL";
 let sortField: SortField = "deadline";
-let editingTaskId: string | null = null;
+let editingTaskId: string | number | null = null;
 let pendingTaskAction: PendingTaskAction | null = null;
 
 // State halaman Mata Kuliah & Profil
 let coursePageState: CoursePageState = createInitialCoursePageState();
 let profilePageState: ProfilePageState = createInitialProfilePageState();
+
+function notifyError(message: string): void {
+  showAlertPopup(API_ERROR_POPUP_ID, message);
+}
+
+async function syncStudentWorkspace(studentId: number): Promise<void> {
+  const [coursesRes, tasksRes] = await Promise.all([
+    fetchCourses(studentId),
+    fetchTasks(studentId),
+  ]);
+
+  if (coursesRes.ok && coursesRes.data) {
+    courseCollection.setAll(coursesRes.data);
+  } else if (coursesRes.message) {
+    notifyError(coursesRes.message);
+  }
+
+  if (tasksRes.ok && tasksRes.data) {
+    taskCollection.setAll(tasksRes.data);
+  } else if (tasksRes.message) {
+    notifyError(tasksRes.message);
+  }
+}
 
 // ==========================================
 // HELPER TANGGAL, DEADLINE H-7 & TRANSFORM DATA
@@ -234,17 +176,24 @@ function getTodayDateString(): string {
   return `${y}-${m}-${d}`;
 }
 
+function normalizeDateOnly(value: string): string {
+  if (!value) return "";
+  return value.slice(0, 10);
+}
+
 function getDaysUntilDeadline(deadlineStr: string): number {
-  if (!deadlineStr) return 9999;
+  const clean = normalizeDateOnly(deadlineStr);
+  if (!clean) return 9999;
   const today = new Date(`${getTodayDateString()}T00:00:00`);
-  const target = new Date(`${deadlineStr}T00:00:00`);
+  const target = new Date(`${clean}T00:00:00`);
   return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function getDaysSinceCreated(createdStr: string): number {
-  if (!createdStr) return 9999;
+  const clean = normalizeDateOnly(createdStr);
+  if (!clean) return 9999;
   const today = new Date(`${getTodayDateString()}T00:00:00`);
-  const created = new Date(`${createdStr}T00:00:00`);
+  const created = new Date(`${clean}T00:00:00`);
   return Math.round((today.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
 }
 
@@ -257,7 +206,7 @@ function isDueWithinH7(task: TaskRecord): boolean {
 function computeDashboardSummary(tasks: TaskRecord[]): DashboardSummary {
   return {
     total: tasks.length,
-    uncompleted: tasks.filter((t) => t.status === "Belum Selesai").length,
+    uncompleted: tasks.filter((t) => t.status !== "Selesai").length,
     dueSoonH7: tasks.filter((t) => isDueWithinH7(t)).length,
     completed: tasks.filter((t) => t.status === "Selesai").length,
   };
@@ -308,12 +257,12 @@ function getFilteredTaskRows(): TaskRowItem[] {
   const q = searchKeyword.trim().toLowerCase();
 
   const filtered = taskCollection.getAll().filter((task) => {
-    if (activeCardFilter === "PENDING" && task.status !== "Belum Selesai") return false;
+    if (activeCardFilter === "PENDING" && task.status === "Selesai") return false;
     if (activeCardFilter === "H7_DEADLINE" && !isDueWithinH7(task)) return false;
     if (activeCardFilter === "COMPLETED" && task.status !== "Selesai") return false;
 
     if (q.length > 0) {
-      const hay = `${task.task_title} ${task.course_name} ${task.task_desc}`.toLowerCase();
+      const hay = `${task.task_title} ${task.course_name} ${task.task_desc ?? ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
 
@@ -332,42 +281,72 @@ function getFilteredTaskRows(): TaskRowItem[] {
 
   const sorted = [...filtered].sort((a, b) => {
     if (sortField === "title") return a.task_title.localeCompare(b.task_title, "id");
-    if (sortField === "createdAt") return b.created_at.localeCompare(a.created_at);
-    return a.deadline.localeCompare(b.deadline);
+    if (sortField === "createdAt") {
+      return normalizeDateOnly(b.created_at).localeCompare(normalizeDateOnly(a.created_at));
+    }
+    return normalizeDateOnly(a.deadline).localeCompare(normalizeDateOnly(b.deadline));
   });
 
-  return sorted.map((task) => {
-    const daysLeft = getDaysUntilDeadline(task.deadline);
-    const isH7 = isDueWithinH7(task);
+  return sorted.map((task): TaskRowItem => {
+    const normalized: TaskRecord = {
+      ...task,
+      id: String(task.id),
+      task_desc: task.task_desc ?? "",
+      assigned_date: normalizeDateOnly(task.assigned_date),
+      created_at: normalizeDateOnly(task.created_at),
+      deadline: normalizeDateOnly(task.deadline),
+      submission_link: task.submission_link ?? "",
+    };
 
-    if (task.status === "Selesai") {
-      return { ...task, badgeLabel: "Selesai", badgeVariant: "completed" };
+    const daysLeft = getDaysUntilDeadline(normalized.deadline);
+    const isH7 = isDueWithinH7(normalized);
+    const rowStatus: TaskRowItem["status"] =
+      normalized.status === "Selesai" ? "Selesai" : "Belum Selesai";
+
+    if (normalized.status === "Selesai") {
+      return {
+        ...normalized,
+        id: String(normalized.id),
+        status: rowStatus,
+        badgeLabel: "Selesai",
+        badgeVariant: "completed",
+      };
     }
     if (isH7) {
       return {
-        ...task,
+        ...normalized,
+        id: String(normalized.id),
+        status: rowStatus,
         badgeLabel: daysLeft === 0 ? "Deadline Hari Ini" : `H-${daysLeft} Deadline`,
         badgeVariant: "urgent",
       };
     }
     if (daysLeft < 0) {
       return {
-        ...task,
+        ...normalized,
+        id: String(normalized.id),
+        status: rowStatus,
         badgeLabel: `Terlambat (${Math.abs(daysLeft)}h)`,
         badgeVariant: "urgent",
       };
     }
-    return { ...task, badgeLabel: task.status, badgeVariant: "pending" };
+    return {
+      ...normalized,
+      id: String(normalized.id),
+      status: rowStatus,
+      badgeLabel: normalized.status,
+      badgeVariant: "pending",
+    };
   });
 }
 
 // ==========================================
-// CRUD TUGAS, MATA KULIAH & AKUN DI MEMORY
+// OPERASI CRUD TUGAS & MATA KULIAH VIA API
 // ==========================================
 
-function openTaskModal(taskId?: string): void {
+function openTaskModal(taskId?: string | number): void {
   editingTaskId = taskId ?? null;
-  const existing = taskId ? taskCollection.findById(taskId) : undefined;
+  const existing = taskId !== undefined ? taskCollection.findById(taskId) : undefined;
   const today = getTodayDateString();
 
   if (existing) {
@@ -377,11 +356,11 @@ function openTaskModal(taskId?: string): void {
       values: {
         task_title: existing.task_title,
         course_name: existing.course_name,
-        task_desc: existing.task_desc,
-        assigned_date: existing.assigned_date,
-        deadline: existing.deadline,
-        submission_link: existing.submission_link,
-        status: existing.status,
+        task_desc: existing.task_desc ?? "",
+        assigned_date: normalizeDateOnly(existing.assigned_date),
+        deadline: normalizeDateOnly(existing.deadline),
+        submission_link: existing.submission_link ?? "",
+        status: existing.status === "Selesai" ? "Selesai" : "Belum Selesai",
       },
     });
   } else {
@@ -401,63 +380,56 @@ function openTaskModal(taskId?: string): void {
   }
 }
 
-function resolveCourseRecord(courseName: string): Course {
+async function resolveCourseId(courseName: string): Promise<number | null> {
   const matched = courseCollection
     .getAll()
     .find((c) => c.course_name.toLowerCase() === courseName.toLowerCase());
-  if (matched) return matched;
+  if (matched) return matched.id;
 
-  const nextId =
-    courseCollection.getAll().reduce((max, item) => Math.max(max, item.id), 0) + 1;
-  const newCourse: Course = {
-    id: nextId,
+  const created = await createCourse(currentStudent.id, {
     course_name: courseName,
-    course_code: null,
-    lecturer_name: null,
+    course_code: "",
+    lecturer_name: "",
     semester: "2026 Ganjil",
-  };
-  courseCollection.setAll([...courseCollection.getAll(), newCourse]);
-  return newCourse;
+  });
+
+  if (!created.ok || !created.data) {
+    notifyError(created.message || "Gagal membuat mata kuliah baru.");
+    return null;
+  }
+
+  courseCollection.setAll([...courseCollection.getAll(), created.data]);
+  return created.data.id;
 }
 
-function saveTask(values: TaskFormValues): void {
-  const course = resolveCourseRecord(values.course_name);
-  const currentList = taskCollection.getAll();
-  const autoCreatedAt = getTodayDateString();
+async function saveTask(values: TaskFormValues): Promise<void> {
+  const courseId = await resolveCourseId(values.course_name);
+  if (courseId === null) return;
 
-  if (editingTaskId) {
+  if (editingTaskId !== null) {
+    const res = await updateTask(editingTaskId, { course_id: courseId, values });
+    if (!res.ok || !res.data) {
+      notifyError(res.message || "Gagal memperbarui tugas.");
+      return;
+    }
+
     taskCollection.setAll(
-      currentList.map((item) =>
-        item.id === editingTaskId
-          ? {
-              ...item,
-              course_id: course.id,
-              course_name: course.course_name,
-              task_title: values.task_title,
-              task_desc: values.task_desc,
-              assigned_date: values.assigned_date,
-              deadline: values.deadline,
-              submission_link: values.submission_link,
-              status: values.status,
-            }
-          : item
+      taskCollection.getAll().map((item) =>
+        String(item.id) === String(editingTaskId) ? res.data! : item
       )
     );
   } else {
-    const newTask: TaskRecord = {
-      id: `task-${Date.now()}`,
+    const res = await createTask({
       student_id: currentStudent.id,
-      course_id: course.id,
-      course_name: course.course_name,
-      task_title: values.task_title,
-      task_desc: values.task_desc,
-      assigned_date: values.assigned_date,
-      created_at: autoCreatedAt,
-      deadline: values.deadline,
-      submission_link: values.submission_link,
-      status: "Belum Selesai",
-    };
-    taskCollection.setAll([newTask, ...currentList]);
+      course_id: courseId,
+      values,
+    });
+    if (!res.ok || !res.data) {
+      notifyError(res.message || "Gagal menambahkan tugas.");
+      return;
+    }
+
+    taskCollection.setAll([res.data, ...taskCollection.getAll()]);
   }
 
   editingTaskId = null;
@@ -465,7 +437,7 @@ function saveTask(values: TaskFormValues): void {
   renderView();
 }
 
-function requestToggleTaskStatus(taskId: string): void {
+function requestToggleTaskStatus(taskId: string | number): void {
   const target = taskCollection.findById(taskId);
   if (!target) return;
 
@@ -480,7 +452,7 @@ function requestToggleTaskStatus(taskId: string): void {
   );
 }
 
-function requestDeleteTask(taskId: string): void {
+function requestDeleteTask(taskId: string | number): void {
   const target = taskCollection.findById(taskId);
   if (!target) return;
 
@@ -491,79 +463,100 @@ function requestDeleteTask(taskId: string): void {
   );
 }
 
-function executePendingTaskAction(): void {
+async function executePendingTaskAction(): Promise<void> {
   if (!pendingTaskAction) return;
 
   if (pendingTaskAction.type === "toggle") {
     const targetId = pendingTaskAction.taskId;
+    const target = taskCollection.findById(targetId);
+    if (!target) {
+      pendingTaskAction = null;
+      return;
+    }
+
+    const nextStatus: TaskStatus =
+      target.status === "Selesai" ? "Belum Selesai" : "Selesai";
+    const res = await updateTaskStatus(targetId, nextStatus);
+    pendingTaskAction = null;
+
+    if (!res.ok) {
+      notifyError(res.message || "Gagal mengubah status tugas.");
+      return;
+    }
+
     taskCollection.setAll(
       taskCollection.getAll().map((item) =>
-        item.id === targetId
-          ? { ...item, status: item.status === "Selesai" ? "Belum Selesai" : "Selesai" }
-          : item
+        String(item.id) === String(targetId) ? { ...item, status: nextStatus } : item
       )
     );
+    renderView();
   } else if (pendingTaskAction.type === "delete") {
     const targetId = pendingTaskAction.taskId;
-    taskCollection.setAll(taskCollection.getAll().filter((item) => item.id !== targetId));
-  }
+    const res = await removeTask(targetId);
+    pendingTaskAction = null;
 
-  pendingTaskAction = null;
-  renderView();
+    if (!res.ok) {
+      notifyError(res.message || "Gagal menghapus tugas.");
+      return;
+    }
+
+    taskCollection.setAll(
+      taskCollection.getAll().filter((item) => String(item.id) !== String(targetId))
+    );
+    renderView();
+  }
 }
 
-function saveCourse(values: CourseFormValues, editingCourseId: number | null): void {
-  const currentCourses = courseCollection.getAll();
-  const normalizedCode = values.course_code || null;
-  const normalizedLecturer = values.lecturer_name || null;
-
+async function saveCourse(
+  values: CourseFormValues,
+  editingCourseId: number | null
+): Promise<void> {
   if (editingCourseId !== null) {
+    const res = await updateCourse(currentStudent.id, editingCourseId, values);
+    if (!res.ok || !res.data) {
+      notifyError(res.message || "Gagal mengubah mata kuliah.");
+      return;
+    }
+
     courseCollection.setAll(
-      currentCourses.map((item) =>
-        item.id === editingCourseId
-          ? {
-              ...item,
-              course_name: values.course_name,
-              course_code: normalizedCode,
-              lecturer_name: normalizedLecturer,
-              semester: values.semester,
-            }
-          : item
+      courseCollection.getAll().map((item) =>
+        item.id === editingCourseId ? res.data! : item
       )
     );
-
     taskCollection.setAll(
       taskCollection.getAll().map((task) =>
         task.course_id === editingCourseId
-          ? { ...task, course_name: values.course_name }
+          ? { ...task, course_name: res.data!.course_name }
           : task
       )
     );
   } else {
-    const nextId =
-      currentCourses.reduce((max, item) => Math.max(max, item.id), 0) + 1;
-    const newCourse: Course = {
-      id: nextId,
-      course_name: values.course_name,
-      course_code: normalizedCode,
-      lecturer_name: normalizedLecturer,
-      semester: values.semester,
-    };
-    courseCollection.setAll([...currentCourses, newCourse]);
+    const res = await createCourse(currentStudent.id, values);
+    if (!res.ok || !res.data) {
+      notifyError(res.message || "Gagal menambah mata kuliah.");
+      return;
+    }
+
+    courseCollection.setAll([...courseCollection.getAll(), res.data]);
   }
 
   renderView();
 }
 
-function deleteCourse(courseId: number): void {
+async function deleteCourse(courseId: number): Promise<void> {
+  const res = await removeCourse(currentStudent.id, courseId);
+  if (!res.ok) {
+    notifyError(res.message || "Gagal menghapus mata kuliah.");
+    return;
+  }
+
   courseCollection.setAll(
     courseCollection.getAll().filter((item) => item.id !== courseId)
   );
+  taskCollection.setAll(
+    taskCollection.getAll().filter((task) => task.course_id !== courseId)
+  );
   renderView();
-}
-
-function getActiveAccount(): UserAccount | undefined {
-  return accounts.find((acc) => acc.id === currentStudent.id);
 }
 
 // ==========================================
@@ -609,10 +602,20 @@ function renderView(): void {
   if (!root) return;
 
   if (!isAuthenticated) {
-    root.innerHTML =
-      authScreen === "login"
-        ? renderLoginPage(APP_NAME)
-        : renderRegisterPage(APP_NAME);
+    root.innerHTML = `
+      ${
+        authScreen === "login"
+          ? renderLoginPage(APP_NAME)
+          : renderRegisterPage(APP_NAME)
+      }
+      ${renderAlertPopup({
+        id: API_ERROR_POPUP_ID,
+        title: "Peringatan Sistem",
+        message: "Terjadi kesalahan saat menghubungi server.",
+        confirmLabel: "Mengerti",
+      })}
+    `;
+    bindAlertPopupEvents(API_ERROR_POPUP_ID, {});
     attachAuthListeners();
     return;
   }
@@ -660,6 +663,13 @@ function renderView(): void {
       confirmLabel: "Ya, Logout",
       cancelLabel: "Batal",
     })}
+
+    ${renderAlertPopup({
+      id: API_ERROR_POPUP_ID,
+      title: "Peringatan Sistem",
+      message: "Terjadi kesalahan saat menghubungi server.",
+      confirmLabel: "Mengerti",
+    })}
   `;
 
   attachAppListeners();
@@ -669,22 +679,19 @@ function attachAuthListeners(): void {
   if (authScreen === "login") {
     bindLoginPageEvents({
       onLoginSuccess: ({ nim, password }) => {
-        const matched = accounts.find(
-          (acc) => acc.nim === nim && acc.password === password
-        );
-        if (!matched) return false;
+        void (async () => {
+          const res = await loginStudent({ nim, password });
+          if (!res.ok || !res.data) {
+            notifyError(res.message || "NIM atau password salah.");
+            return;
+          }
 
-        currentStudent = {
-          id: matched.id,
-          nim: matched.nim,
-          full_name: matched.full_name,
-          major: matched.major,
-          faculty: matched.faculty,
-          university: matched.university,
-        };
-        isAuthenticated = true;
-        activeMenu = "dashboard";
-        renderView();
+          currentStudent = res.data;
+          await syncStudentWorkspace(res.data.id);
+          isAuthenticated = true;
+          activeMenu = "dashboard";
+          renderView();
+        })();
         return true;
       },
       onGoToRegister: () => {
@@ -696,24 +703,17 @@ function attachAuthListeners(): void {
   } else {
     bindRegisterPageEvents({
       onRegisterSubmit: (payload) => {
-        const duplicate = accounts.some((acc) => acc.nim === payload.nim);
-        if (duplicate) {
-          return {
-            ok: false,
-            warning: "Peringatan: NIM sudah terdaftar. Gunakan NIM lain atau masuk ke akun.",
-          };
-        }
+        void (async () => {
+          const res = await registerStudent(payload);
+          if (!res.ok) {
+            notifyError(res.message || "Peringatan: Gagal mendaftarkan akun.");
+            return;
+          }
 
-        const nextId = accounts.reduce((max, acc) => Math.max(max, acc.id), 0) + 1;
-        const newAccount: UserAccount = {
-          id: nextId,
-          ...payload,
-        };
-        accounts = [...accounts, newAccount];
-
-        isAuthenticated = false;
-        authScreen = "login";
-        renderView();
+          isAuthenticated = false;
+          authScreen = "login";
+          renderView();
+        })();
         return { ok: true };
       },
       onGoToLogin: () => {
@@ -726,6 +726,8 @@ function attachAuthListeners(): void {
 }
 
 function attachAppListeners(): void {
+  bindAlertPopupEvents(API_ERROR_POPUP_ID, {});
+
   bindTopBarEvents(() => {
     isDrawerOpen = !isDrawerOpen;
     renderView();
@@ -752,6 +754,8 @@ function attachAppListeners(): void {
     onConfirm: () => {
       isAuthenticated = false;
       authScreen = "login";
+      courseCollection.setAll([]);
+      taskCollection.setAll([]);
       renderView();
     },
   });
@@ -799,11 +803,15 @@ function attachAppListeners(): void {
         editingTaskId = null;
         hideTaskModal();
       },
-      onSubmit: saveTask,
+      onSubmit: (values) => {
+        void saveTask(values);
+      },
     });
 
     bindAlertPopupEvents(TASK_CONFIRM_ID, {
-      onConfirm: executePendingTaskAction,
+      onConfirm: () => {
+        void executePendingTaskAction();
+      },
       onCancel: () => {
         pendingTaskAction = null;
       },
@@ -814,8 +822,12 @@ function attachAppListeners(): void {
         coursePageState = updater(coursePageState);
         renderView();
       },
-      onAddCourse: saveCourse,
-      onDeleteCourse: deleteCourse,
+      onAddCourse: (values, editingId) => {
+        void saveCourse(values, editingId);
+      },
+      onDeleteCourse: (courseId) => {
+        void deleteCourse(courseId);
+      },
     });
   } else {
     bindProfilePageEvents({
@@ -824,23 +836,24 @@ function attachAppListeners(): void {
         renderView();
       },
       onSaveProfile: (updated) => {
-        currentStudent = {
-          ...currentStudent,
-          ...updated,
-        };
-        accounts = accounts.map((acc) =>
-          acc.id === currentStudent.id ? { ...acc, ...updated } : acc
-        );
-        renderView();
+        void (async () => {
+          const res = await updateStudentProfile(currentStudent.id, updated);
+          if (!res.ok || !res.data) {
+            notifyError(res.message || "Gagal memperbarui profil.");
+            return;
+          }
+          currentStudent = res.data;
+          renderView();
+        })();
       },
-      onVerifyOldPassword: (oldPassword) => {
-        const active = getActiveAccount();
-        return Boolean(active && active.password === oldPassword);
-      },
-      onConfirmChangePassword: ({ newPassword }) => {
-        accounts = accounts.map((acc) =>
-          acc.id === currentStudent.id ? { ...acc, password: newPassword } : acc
-        );
+      onVerifyOldPassword: () => true,
+      onConfirmChangePassword: (payload) => {
+        void (async () => {
+          const res = await changeStudentPassword(currentStudent.id, payload);
+          if (!res.ok) {
+            notifyError(res.message || "Gagal mengganti password.");
+          }
+        })();
       },
     });
   }
