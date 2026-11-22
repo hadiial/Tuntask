@@ -5,7 +5,7 @@ export interface ChangePasswordPayload {
 
 export interface ChangePasswordModalHandlers {
   onVerifyOldPassword: (oldPassword: string) => boolean;
-  onConfirmChange: (payload: ChangePasswordPayload) => void;
+  onRequestConfirm: (payload: ChangePasswordPayload) => void;
 }
 
 export function renderChangePasswordModal(): string {
@@ -93,38 +93,6 @@ export function renderChangePasswordModal(): string {
         </form>
       </div>
     </div>
-
-    <!-- Popup Konfirmasi Ganti Password -->
-    <div
-      id="confirmPasswordPopupOverlay"
-      role="dialog"
-      aria-modal="true"
-      class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/55 p-4"
-    >
-      <div class="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-5 shadow-xl">
-        <h3 class="text-base font-bold text-slate-900">Konfirmasi Ganti Password</h3>
-        <p class="mt-1.5 text-xs leading-relaxed text-slate-600">
-          Apakah kamu yakin ingin mengubah password akun sekarang?
-        </p>
-
-        <div class="mt-4 flex justify-end gap-2">
-          <button
-            type="button"
-            id="cancelConfirmPasswordBtn"
-            class="rounded-lg border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 cursor-pointer"
-          >
-            Batal
-          </button>
-          <button
-            type="button"
-            id="confirmChangePasswordBtn"
-            class="rounded-lg bg-red-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-red-700 cursor-pointer"
-          >
-            Ya, Ganti Password
-          </button>
-        </div>
-      </div>
-    </div>
   `;
 }
 
@@ -149,7 +117,6 @@ function toggleOverlay(id: string, show: boolean): void {
 
 export function openChangePasswordModal(): void {
   setAlert(null);
-  (document.getElementById("oldPasswordInput") as HTMLInputElement | null)?.setAttribute("value", "");
   const form = document.getElementById("changePasswordForm") as HTMLFormElement | null;
   form?.reset();
   toggleOverlay("changePasswordModalOverlay", true);
@@ -157,22 +124,18 @@ export function openChangePasswordModal(): void {
 }
 
 export function closeChangePasswordModal(): void {
-  toggleOverlay("confirmPasswordPopupOverlay", false);
   toggleOverlay("changePasswordModalOverlay", false);
 }
 
 export function bindChangePasswordModalEvents(handlers: ChangePasswordModalHandlers): void {
-  let pendingPayload: ChangePasswordPayload | null = null;
-
-  const closeAll = (): void => {
-    pendingPayload = null;
-    closeChangePasswordModal();
-  };
-
-  document.getElementById("closePasswordModalBtn")?.addEventListener("click", closeAll);
-  document.getElementById("cancelPasswordModalBtn")?.addEventListener("click", closeAll);
+  document
+    .getElementById("closePasswordModalBtn")
+    ?.addEventListener("click", closeChangePasswordModal);
+  document
+    .getElementById("cancelPasswordModalBtn")
+    ?.addEventListener("click", closeChangePasswordModal);
   document.getElementById("changePasswordModalOverlay")?.addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) closeAll();
+    if (e.target === e.currentTarget) closeChangePasswordModal();
   });
 
   document.getElementById("changePasswordForm")?.addEventListener("submit", (e) => {
@@ -195,27 +158,6 @@ export function bindChangePasswordModalEvents(handlers: ChangePasswordModalHandl
     }
 
     setAlert(null);
-    pendingPayload = { oldPassword, newPassword };
-    toggleOverlay("confirmPasswordPopupOverlay", true);
-  });
-
-  document.getElementById("cancelConfirmPasswordBtn")?.addEventListener("click", () => {
-    pendingPayload = null;
-    toggleOverlay("confirmPasswordPopupOverlay", false);
-  });
-
-  document.getElementById("confirmPasswordPopupOverlay")?.addEventListener("click", (e) => {
-    if (e.target === e.currentTarget) {
-      pendingPayload = null;
-      toggleOverlay("confirmPasswordPopupOverlay", false);
-    }
-  });
-
-  document.getElementById("confirmChangePasswordBtn")?.addEventListener("click", () => {
-    if (!pendingPayload) return;
-    handlers.onConfirmChange(pendingPayload);
-    pendingPayload = null;
-    closeChangePasswordModal();
-    document.getElementById("passwordUpdatedFeedback")?.classList.remove("hidden");
+    handlers.onRequestConfirm({ oldPassword, newPassword });
   });
 }
