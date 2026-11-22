@@ -6,6 +6,7 @@ import { renderStatCardsGrid, bindStatCardsEvents, type StatCardItem,} from "./c
 import { renderTaskTable, bindTaskTableEvents, type TaskRowItem,} from "./components/TaskTable";
 import { renderTaskModal, showTaskModal, hideTaskModal, bindTaskModalEvents, type TaskFormValues,} from "./components/TaskModal";
 import { renderCoursePage, bindCoursePageEvents, createInitialCoursePageState, type CoursePageState,} from "./course";
+import { renderProfilePage, bindProfilePageEvents, createInitialProfilePageState, type ProfilePageState,} from "./profile";
 import type { CourseFormValues } from "./components/CourseModal";
 
 // ==========================================
@@ -76,6 +77,8 @@ export class DataCollection<T extends { id: string | number }> {
   }
 }
 
+let currentPassword = "12345678";
+
 // ==========================================
 // ENVIRONMENT VARIABLES & STATE IN-MEMORY
 // ==========================================
@@ -85,7 +88,7 @@ const APP_VERSION: string = import.meta.env.VITE_APP_VERSION || "1.0.0";
 
 const todayStr = getTodayDateString();
 
-const CURRENT_STUDENT: Student = {
+let currentStudent: Student = {
   id: 1,
   nim: "1247050065",
   full_name: "Salman Hadi Al Ghifari",
@@ -121,7 +124,7 @@ const SEED_COURSES: Course[] = [
 const SEED_TASKS: TaskRecord[] = [
   {
     id: "task-1",
-    student_id: CURRENT_STUDENT.id,
+    student_id: currentStudent.id,
     course_id: 1,
     course_name: "Pengembangan Aplikasi Web",
     task_title: "Implementasi CRUD TypeScript & Git Workflow",
@@ -135,7 +138,7 @@ const SEED_TASKS: TaskRecord[] = [
   },
   {
     id: "task-2",
-    student_id: CURRENT_STUDENT.id,
+    student_id: currentStudent.id,
     course_id: 2,
     course_name: "Manajemen Basis Data",
     task_title: "Normalisasi ERD Oracle & Skema Tabel MySQL",
@@ -148,7 +151,7 @@ const SEED_TASKS: TaskRecord[] = [
   },
   {
     id: "task-3",
-    student_id: CURRENT_STUDENT.id,
+    student_id: currentStudent.id,
     course_id: 3,
     course_name: "Jaringan Komputer",
     task_title: "Konfigurasi OSPF & VLAN Topologi Kampus",
@@ -161,7 +164,7 @@ const SEED_TASKS: TaskRecord[] = [
   },
   {
     id: "task-4",
-    student_id: CURRENT_STUDENT.id,
+    student_id: currentStudent.id,
     course_id: 1,
     course_name: "Pengembangan Aplikasi Web",
     task_title: "Dokumentasi Compiler, Transpiler, Bundler & .env",
@@ -188,8 +191,9 @@ let deadlineFilter: DeadlineFilter = "ALL";
 let sortField: SortField = "deadline";
 let editingTaskId: string | null = null;
 
-// State halaman Mata Kuliah
+// State halaman Mata Kuliah & Profil
 let coursePageState: CoursePageState = createInitialCoursePageState();
+let profilePageState: ProfilePageState = createInitialProfilePageState();
 
 // ==========================================
 // HELPER TANGGAL, DEADLINE H-7 & TRANSFORM DATA
@@ -415,7 +419,7 @@ function saveTask(values: TaskFormValues): void {
   } else {
     const newTask: TaskRecord = {
       id: `task-${Date.now()}`,
-      student_id: CURRENT_STUDENT.id,
+      student_id: currentStudent.id,
       course_id: course.id,
       course_name: course.course_name,
       task_title: values.task_title,
@@ -513,7 +517,7 @@ function renderDashboardBody(): string {
   return `
     ${renderPageHeader({
       title: "Dashboard",
-      subtitle: `${CURRENT_STUDENT.major} — ${CURRENT_STUDENT.university}`,
+      subtitle: `${currentStudent.major} — ${currentStudent.university}`,
       actionLabel: "+ Tambah Tugas",
     })}
 
@@ -535,14 +539,18 @@ function renderView(): void {
   const root = document.querySelector<HTMLDivElement>("#app");
   if (!root) return;
 
-  const pageBody =
-    activeMenu === "dashboard"
-      ? renderDashboardBody()
-      : renderCoursePage(
-          courseCollection.getAll(),
-          taskCollection.getAll(),
-          coursePageState
-        );
+  let pageBody = "";
+  if (activeMenu === "dashboard") {
+    pageBody = renderDashboardBody();
+  } else if (activeMenu === "courses") {
+    pageBody = renderCoursePage(
+      courseCollection.getAll(),
+      taskCollection.getAll(),
+      coursePageState
+    );
+  } else {
+    pageBody = renderProfilePage(currentStudent, profilePageState);
+  }
 
   root.innerHTML = `
     <div class="flex min-h-screen bg-slate-50 text-slate-800">
@@ -557,8 +565,8 @@ function renderView(): void {
         ${renderTopBar({
           appName: APP_NAME,
           dateLabel: getTodayDateString(),
-          studentName: CURRENT_STUDENT.full_name,
-          studentNim: CURRENT_STUDENT.nim,
+          studentName: currentStudent.full_name,
+          studentNim: currentStudent.nim,
         })}
 
         <main class="mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6">
@@ -636,7 +644,7 @@ function attachListeners(): void {
       },
       onSubmit: saveTask,
     });
-  } else {
+  } else if (activeMenu === "courses") {
     bindCoursePageEvents(courseCollection.getAll(), coursePageState, {
       onChangeState: (updater) => {
         coursePageState = updater(coursePageState);
@@ -644,6 +652,24 @@ function attachListeners(): void {
       },
       onAddCourse: saveCourse,
       onDeleteCourse: deleteCourse,
+    });
+  } else {
+    bindProfilePageEvents({
+      onChangeState: (updater) => {
+        profilePageState = updater(profilePageState);
+        renderView();
+      },
+      onSaveProfile: (updated) => {
+        currentStudent = {
+          ...currentStudent,
+          ...updated,
+        };
+        renderView();
+      },
+      onVerifyOldPassword: (oldPassword) => oldPassword === currentPassword,
+      onConfirmChangePassword: ({ newPassword }) => {
+        currentPassword = newPassword;
+      },
     });
   }
 }
