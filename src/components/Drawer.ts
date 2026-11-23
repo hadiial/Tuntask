@@ -1,0 +1,141 @@
+export type DrawerMenu = "dashboard" | "courses" | "profile";
+
+export interface DrawerProps {
+  appName: string;
+  appVersion: string;
+  isOpen: boolean;
+  activeMenu: DrawerMenu;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\x22/g, "&quot;");
+}
+
+export function renderDrawer(props: DrawerProps): string {
+  const { appName, appVersion, isOpen, activeMenu } = props;
+
+  return `
+    <!-- Backdrop saat drawer terbuka di layar kecil / setengah layar -->
+    <div
+      id="drawerBackdrop"
+      class="${
+        isOpen ? "block lg:hidden" : "hidden"
+      } fixed inset-0 z-30 bg-slate-900/35 transition-opacity"
+    ></div>
+
+    <!-- Drawer Navigation Kiri -->
+    <aside
+      id="mainDrawer"
+      class="${
+        isOpen
+          ? "w-60 translate-x-0"
+          : "w-0 -translate-x-full lg:w-0 lg:-translate-x-full"
+      } fixed lg:sticky top-0 left-0 z-40 flex h-screen flex-col justify-between overflow-hidden ${
+        isOpen ? "border-r border-slate-200" : "border-r-0"
+      } bg-white transition-all duration-200 shrink-0"
+    >
+      <div class="overflow-hidden">
+        <div class="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-4">
+          <div class="flex min-w-0 items-center gap-2.5">
+            <div class="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-red-600 text-sm font-bold text-white">
+              T
+            </div>
+            <div class="min-w-0">
+              <div class="truncate text-sm font-bold text-slate-900">${escapeHtml(appName)}</div>
+              <div class="text-[11px] text-slate-500">v${escapeHtml(appVersion)}</div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            id="closeDrawerBtn"
+            title="Tutup Drawer"
+            class="grid h-7 w-7 shrink-0 place-items-center rounded-md border border-slate-200 text-xs text-slate-600 hover:bg-slate-100 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div class="truncate px-4 pt-4 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Menu Utama
+        </div>
+
+        <nav class="space-y-1 px-2.5">
+          <button
+            type="button"
+            data-menu="dashboard"
+            class="drawer-item-btn flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition cursor-pointer ${
+              activeMenu === "dashboard"
+                ? "bg-red-50 font-semibold text-red-600"
+                : "text-slate-700 hover:bg-slate-100"
+            }"
+          >
+            <span>Dashboard</span>
+          </button>
+
+          <button
+            type="button"
+            data-menu="courses"
+            class="drawer-item-btn flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition cursor-pointer ${
+              activeMenu === "courses"
+                ? "bg-red-50 font-semibold text-red-600"
+                : "text-slate-700 hover:bg-slate-100"
+            }"
+          >
+            <span>Mata Kuliah</span>
+          </button>
+
+          <button
+            type="button"
+            data-menu="profile"
+            class="drawer-item-btn flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium whitespace-nowrap transition cursor-pointer ${
+              activeMenu === "profile"
+                ? "bg-red-50 font-semibold text-red-600"
+                : "text-slate-700 hover:bg-slate-100"
+            }"
+          >
+            <span>Profil</span>
+          </button>
+        </nav>
+      </div>
+
+      <div class="border-t border-slate-200 p-3">
+        <button
+          type="button"
+          id="logoutDrawerBtn"
+          class="mb-2 flex w-full items-center justify-center rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-100 transition cursor-pointer whitespace-nowrap"
+        >
+          Logout
+        </button>
+        <div class="truncate px-1 text-xs text-slate-400">
+          Tuntask - 2026
+        </div>
+      </div>
+    </aside>
+  `;
+}
+
+export interface DrawerHandlers {
+  onClose: () => void;
+  onSelectMenu: (menu: DrawerMenu) => void;
+  onLogout: () => void;
+}
+
+export function bindDrawerEvents(handlers: DrawerHandlers): void {
+  document.getElementById("closeDrawerBtn")?.addEventListener("click", handlers.onClose);
+  document.getElementById("drawerBackdrop")?.addEventListener("click", handlers.onClose);
+  document.getElementById("logoutDrawerBtn")?.addEventListener("click", handlers.onLogout);
+
+  document.querySelectorAll<HTMLButtonElement>(".drawer-item-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const menu = btn.dataset.menu as DrawerMenu | undefined;
+      if (menu) {
+        handlers.onSelectMenu(menu);
+      }
+    });
+  });
+}
