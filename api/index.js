@@ -1,11 +1,18 @@
+import { createRequire } from "module";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const require = createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-const { pool } = require("../server/src/db");
 
-const authRoutes = require("../server/src/routes/auth");
-const courseRoutes = require("../server/src/routes/courses");
-const taskRoutes = require("../server/src/routes/tasks");
+const { pool } = require(path.join(__dirname, "../server/src/db.js"));
+const authRoutes = require(path.join(__dirname, "../server/src/routes/auth.js"));
+const courseRoutes = require(path.join(__dirname, "../server/src/routes/courses.js"));
+const taskRoutes = require(path.join(__dirname, "../server/src/routes/tasks.js"));
 
 const app = express();
 
@@ -29,4 +36,4 @@ app.use("/api/auth", authRoutes);
 app.use("/api/courses", courseRoutes);
 app.use("/api/tasks", taskRoutes);
 
-module.exports = app;
+export default app;
