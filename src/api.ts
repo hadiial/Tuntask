@@ -90,6 +90,20 @@ export async function updateStudentProfile(
   return { ok: res.ok, message: res.message, data: res.data?.student };
 }
 
+export async function verifyStudentPassword(
+  studentId: number,
+  oldPassword: string
+): Promise<boolean> {
+  const res = await requestJson<null>(
+    `/api/auth/profile/${studentId}/verify-password`,
+    {
+      method: "POST",
+      body: JSON.stringify({ oldPassword }),
+    }
+  );
+  return res.ok;
+}
+
 export async function changeStudentPassword(
   studentId: number,
   payload: ChangePasswordPayload

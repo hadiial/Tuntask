@@ -15,6 +15,7 @@ import {
   loginStudent,
   registerStudent,
   updateStudentProfile,
+  verifyStudentPassword,
   changeStudentPassword,
   fetchCourses,
   createCourse,
@@ -846,7 +847,8 @@ function attachAppListeners(): void {
           renderView();
         })();
       },
-      onVerifyOldPassword: () => true,
+      onVerifyOldPassword: (oldPassword) =>
+        verifyStudentPassword(currentStudent.id, oldPassword),
       onConfirmChangePassword: (payload) => {
         void (async () => {
           const res = await changeStudentPassword(currentStudent.id, payload);

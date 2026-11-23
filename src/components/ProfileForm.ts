@@ -7,7 +7,8 @@ function escapeHtml(value: string): string {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(/\x22/g, "&quot;");
+    .replace(/\x22/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 export function renderProfileForm(student: Student): string {
@@ -29,14 +30,15 @@ export function renderProfileForm(student: Student): string {
 
         <div>
           <label for="pNim" class="mb-1 block text-xs font-semibold text-slate-700">
-            NIM *
+            NIM (Tidak dapat diubah)
           </label>
           <input
             type="text"
             id="pNim"
-            required
+            readonly
+            aria-readonly="true"
             value="${escapeHtml(student.nim)}"
-            class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
+            class="w-full cursor-not-allowed rounded-lg border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-500 focus:outline-none"
           />
         </div>
 
