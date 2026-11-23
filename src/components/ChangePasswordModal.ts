@@ -4,7 +4,7 @@ export interface ChangePasswordPayload {
 }
 
 export interface ChangePasswordModalHandlers {
-  onVerifyOldPassword: (oldPassword: string) => boolean;
+  onVerifyOldPassword: (oldPassword: string) => Promise<boolean> | boolean;
   onRequestConfirm: (payload: ChangePasswordPayload) => void;
 }
 
@@ -85,6 +85,7 @@ export function renderChangePasswordModal(): string {
             </button>
             <button
               type="submit"
+              id="submitPasswordModalBtn"
               class="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 cursor-pointer"
             >
               Lanjutkan
@@ -138,7 +139,7 @@ export function bindChangePasswordModalEvents(handlers: ChangePasswordModalHandl
     if (e.target === e.currentTarget) closeChangePasswordModal();
   });
 
-  document.getElementById("changePasswordForm")?.addEventListener("submit", (e) => {
+  document.getElementById("changePasswordForm")?.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const oldPassword = (document.getElementById("oldPasswordInput") as HTMLInputElement).value;
@@ -147,17 +148,25 @@ export function bindChangePasswordModalEvents(handlers: ChangePasswordModalHandl
       document.getElementById("confirmPasswordInput") as HTMLInputElement
     ).value;
 
-    if (!handlers.onVerifyOldPassword(oldPassword)) {
-      setAlert("Peringatan: Password lama salah.");
-      return;
-    }
-
     if (newPassword !== confirmPassword) {
       setAlert("Peringatan: Password baru dan konfirmasi password baru tidak sesuai.");
       return;
     }
 
-    setAlert(null);
-    handlers.onRequestConfirm({ oldPassword, newPassword });
+    const submitBtn = document.getElementById("submitPasswordModalBtn") as HTMLButtonElement | null;
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const isOldValid = await handlers.onVerifyOldPassword(oldPassword);
+      if (!isOldValid) {
+        setAlert("Peringatan: Password lama salah.");
+        return;
+      }
+
+      setAlert(null);
+      handlers.onRequestConfirm({ oldPassword, newPassword });
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
+    }
   });
 }

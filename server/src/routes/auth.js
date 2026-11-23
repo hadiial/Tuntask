@@ -106,18 +106,17 @@ router.get("/profile/:studentId", async (req, res) => {
 router.put("/profile/:studentId", async (req, res) => {
   try {
     const studentId = Number(req.params.studentId);
-    const { nim, full_name, major, faculty, university } = req.body;
+    const { full_name, major, faculty, university } = req.body;
 
-    if (!nim || !full_name || !major || !faculty || !university) {
+    if (!full_name || !major || !faculty || !university) {
       return res.status(400).json({ ok: false, message: "Semua data profil wajib diisi." });
     }
 
     await pool.query(
       `UPDATE students
-       SET nim = ?, full_name = ?, major = ?, faculty = ?, university = ?
+       SET full_name = ?, major = ?, faculty = ?, university = ?
        WHERE id = ?`,
       [
-        nim.trim(),
         full_name.trim(),
         major.trim(),
         faculty.trim(),
@@ -136,6 +135,37 @@ router.put("/profile/:studentId", async (req, res) => {
     return res
       .status(500)
       .json({ ok: false, message: "Gagal memperbarui profil.", error: err.message });
+  }
+});
+
+// POST /api/auth/profile/:studentId/verify-password
+router.post("/profile/:studentId/verify-password", async (req, res) => {
+  try {
+    const studentId = Number(req.params.studentId);
+    const { oldPassword } = req.body;
+
+    if (!oldPassword) {
+      return res.status(400).json({ ok: false, message: "Password lama wajib diisi." });
+    }
+
+    const [rows] = await pool.query(
+      "SELECT id, password_hash FROM students WHERE id = ? LIMIT 1",
+      [studentId]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ ok: false, message: "Mahasiswa tidak ditemukan." });
+    }
+
+    const matched = await bcrypt.compare(oldPassword, rows[0].password_hash);
+    if (!matched) {
+      return res.status(400).json({ ok: false, message: "Password lama salah." });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ ok: false, message: "Gagal memverifikasi password.", error: err.message });
   }
 });
 

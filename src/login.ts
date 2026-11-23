@@ -25,7 +25,7 @@ export function renderLoginPage(appName: string): string {
           id: "loginNim",
           label: "NIM *",
           type: "text",
-          placeholder: "Contoh: 1247050065",
+          placeholder: "Masukkan NIM kamu",
           required: true,
           fullWidth: true,
         },

@@ -3,6 +3,8 @@ export interface TaskRowItem {
   task_title: string;
   task_desc: string;
   course_name: string;
+  lecturer_name?: string | null;
+  semester?: string | null;
   assigned_date: string;
   created_at: string;
   deadline: string;
@@ -52,6 +54,12 @@ function renderTaskRows(rows: TaskRowItem[]): string {
         : `<span class="text-xs text-slate-400">-</span>`;
 
       const assignedText = task.assigned_date ? escapeHtml(task.assigned_date) : "-";
+      const lecturerText = task.lecturer_name?.trim()
+        ? `Dosen: ${escapeHtml(task.lecturer_name.trim())}`
+        : "Dosen: -";
+      const semesterText = task.semester?.trim()
+        ? `Semester: ${escapeHtml(task.semester.trim())}`
+        : "Semester: -";
 
       return `
         <tr class="border-b border-slate-100 hover:bg-slate-50/80 transition-colors">
@@ -68,8 +76,16 @@ function renderTaskRows(rows: TaskRowItem[]): string {
               Tanggal Penugasan: ${assignedText}
             </div>
           </td>
-          <td class="px-4 py-3 align-top text-xs font-semibold text-slate-700 whitespace-nowrap">
-            ${escapeHtml(task.course_name)}
+          <td class="px-4 py-3 align-top whitespace-nowrap">
+            <div class="text-xs font-semibold text-slate-800">
+              ${escapeHtml(task.course_name)}
+            </div>
+            <div class="mt-0.5 text-[11px] text-slate-500">
+              ${lecturerText}
+            </div>
+            <div class="text-[11px] text-slate-400">
+              ${semesterText}
+            </div>
           </td>
           <td class="px-4 py-3 align-top text-xs text-slate-600 whitespace-nowrap">
             ${escapeHtml(task.created_at)}
@@ -195,7 +211,7 @@ export function renderTaskTable(props: TaskTableProps): string {
               <th class="px-4 py-2.5">Aksi</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="taskTableBody">
             ${renderTaskRows(rows)}
           </tbody>
         </table>
@@ -213,6 +229,32 @@ export interface TaskTableHandlers {
   onToggleTask: (id: string) => void;
   onEditTask: (id: string) => void;
   onDeleteTask: (id: string) => void;
+}
+
+export function bindTaskRowActionEvents(
+  handlers: Pick<TaskTableHandlers, "onToggleTask" | "onEditTask" | "onDeleteTask">
+): void {
+  document.querySelectorAll<HTMLButtonElement>("button[data-act]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      if (!act || !id) return;
+
+      if (act === "toggle") handlers.onToggleTask(id);
+      else if (act === "edit") handlers.onEditTask(id);
+      else if (act === "delete") handlers.onDeleteTask(id);
+    });
+  });
+}
+
+export function updateTaskTableBody(
+  rows: TaskRowItem[],
+  handlers: Pick<TaskTableHandlers, "onToggleTask" | "onEditTask" | "onDeleteTask">
+): void {
+  const tbody = document.getElementById("taskTableBody");
+  if (!tbody) return;
+  tbody.innerHTML = renderTaskRows(rows);
+  bindTaskRowActionEvents(handlers);
 }
 
 export function bindTaskTableEvents(handlers: TaskTableHandlers): void {
@@ -234,15 +276,5 @@ export function bindTaskTableEvents(handlers: TaskTableHandlers): void {
 
   document.getElementById("resetFiltersBtn")?.addEventListener("click", handlers.onResetFilters);
 
-  document.querySelectorAll<HTMLButtonElement>("button[data-act]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const act = btn.dataset.act;
-      const id = btn.dataset.id;
-      if (!act || !id) return;
-
-      if (act === "toggle") handlers.onToggleTask(id);
-      else if (act === "edit") handlers.onEditTask(id);
-      else if (act === "delete") handlers.onDeleteTask(id);
-    });
-  });
+  bindTaskRowActionEvents(handlers);
 }

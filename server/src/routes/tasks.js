@@ -12,30 +12,33 @@ function normalizeDeadline(input) {
   return trimmed.replace("T", " ");
 }
 
+const TASK_SELECT_SQL = `
+  SELECT
+    t.id,
+    t.student_id,
+    t.course_id,
+    c.course_name,
+    c.lecturer_name,
+    c.semester,
+    t.task_title,
+    t.task_desc,
+    DATE_FORMAT(t.assigned_date, '%Y-%m-%d') AS assigned_date,
+    DATE_FORMAT(t.created_at, '%Y-%m-%d') AS created_at,
+    DATE_FORMAT(t.deadline, '%Y-%m-%d') AS deadline,
+    t.submission_link,
+    t.status
+  FROM tasks t
+  JOIN courses c ON c.id = t.course_id
+`;
+
 // GET /api/tasks?studentId=1
 router.get("/", async (req, res) => {
   try {
     const studentId = req.query.studentId ? Number(req.query.studentId) : null;
-    const baseSql = `
-      SELECT
-        t.id,
-        t.student_id,
-        t.course_id,
-        c.course_name,
-        t.task_title,
-        t.task_desc,
-        DATE_FORMAT(t.assigned_date, '%Y-%m-%d') AS assigned_date,
-        DATE_FORMAT(t.created_at, '%Y-%m-%d') AS created_at,
-        DATE_FORMAT(t.deadline, '%Y-%m-%d') AS deadline,
-        t.submission_link,
-        t.status
-      FROM tasks t
-      JOIN courses c ON c.id = t.course_id
-    `;
 
     const [rows] = studentId
-      ? await pool.query(`${baseSql} WHERE t.student_id = ? ORDER BY t.deadline ASC`, [studentId])
-      : await pool.query(`${baseSql} ORDER BY t.deadline ASC`);
+      ? await pool.query(`${TASK_SELECT_SQL} WHERE t.student_id = ? ORDER BY t.deadline ASC`, [studentId])
+      : await pool.query(`${TASK_SELECT_SQL} ORDER BY t.deadline ASC`);
 
     return res.json({ ok: true, tasks: rows });
   } catch (err) {
@@ -84,24 +87,7 @@ router.post("/", async (req, res) => {
       ]
     );
 
-    const [rows] = await pool.query(
-      `SELECT
-        t.id,
-        t.student_id,
-        t.course_id,
-        c.course_name,
-        t.task_title,
-        t.task_desc,
-        DATE_FORMAT(t.assigned_date, '%Y-%m-%d') AS assigned_date,
-        DATE_FORMAT(t.created_at, '%Y-%m-%d') AS created_at,
-        DATE_FORMAT(t.deadline, '%Y-%m-%d') AS deadline,
-        t.submission_link,
-        t.status
-       FROM tasks t
-       JOIN courses c ON c.id = t.course_id
-       WHERE t.id = ?`,
-      [result.insertId]
-    );
+    const [rows] = await pool.query(`${TASK_SELECT_SQL} WHERE t.id = ?`, [result.insertId]);
 
     return res.status(201).json({ ok: true, task: rows[0] });
   } catch (err) {
@@ -148,24 +134,7 @@ router.put("/:id", async (req, res) => {
       ]
     );
 
-    const [rows] = await pool.query(
-      `SELECT
-        t.id,
-        t.student_id,
-        t.course_id,
-        c.course_name,
-        t.task_title,
-        t.task_desc,
-        DATE_FORMAT(t.assigned_date, '%Y-%m-%d') AS assigned_date,
-        DATE_FORMAT(t.created_at, '%Y-%m-%d') AS created_at,
-        DATE_FORMAT(t.deadline, '%Y-%m-%d') AS deadline,
-        t.submission_link,
-        t.status
-       FROM tasks t
-       JOIN courses c ON c.id = t.course_id
-       WHERE t.id = ?`,
-      [id]
-    );
+    const [rows] = await pool.query(`${TASK_SELECT_SQL} WHERE t.id = ?`, [id]);
 
     return res.json({ ok: true, task: rows[0] });
   } catch (err) {

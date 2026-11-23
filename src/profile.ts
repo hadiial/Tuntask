@@ -20,6 +20,7 @@ import type { Student } from "./main";
 
 export type { ChangePasswordPayload };
 
+const EDIT_PROFILE_CONFIRM_ID = "editProfileConfirmPopup";
 const CHANGE_PASSWORD_CONFIRM_ID = "changePasswordConfirmPopup";
 
 export interface ProfilePageState {
@@ -29,7 +30,7 @@ export interface ProfilePageState {
 export interface ProfilePageActions {
   onChangeState: (updater: (prev: ProfilePageState) => ProfilePageState) => void;
   onSaveProfile: (updated: ProfileEditableFields) => void;
-  onVerifyOldPassword: (oldPassword: string) => boolean;
+  onVerifyOldPassword: (oldPassword: string) => Promise<boolean> | boolean;
   onConfirmChangePassword: (payload: ChangePasswordPayload) => void;
 }
 
@@ -116,6 +117,14 @@ export function renderProfilePage(student: Student, state: ProfilePageState): st
       </div>
     </section>
 
+    ${renderAlertPopup({
+      id: EDIT_PROFILE_CONFIRM_ID,
+      title: "Konfirmasi Perubahan Profil",
+      message: "Apakah kamu yakin ingin menyimpan perubahan data diri ini?",
+      confirmLabel: "Ya, Simpan",
+      cancelLabel: "Batal",
+    })}
+
     ${renderChangePasswordModal()}
     ${renderAlertPopup({
       id: CHANGE_PASSWORD_CONFIRM_ID,
@@ -128,43 +137,60 @@ export function renderProfilePage(student: Student, state: ProfilePageState): st
 }
 
 export function bindProfilePageEvents(actions: ProfilePageActions): void {
-  let pendingPayload: ChangePasswordPayload | null = null;
+  let pendingProfileUpdate: ProfileEditableFields | null = null;
+  let pendingPasswordPayload: ChangePasswordPayload | null = null;
 
   bindPageHeaderEvents(() => {
     actions.onChangeState((prev) => ({ isEditing: !prev.isEditing }));
   });
 
   bindProfileFormEvents({
-    onCancel: () => actions.onChangeState(() => ({ isEditing: false })),
+    onCancel: () => {
+      pendingProfileUpdate = null;
+      actions.onChangeState(() => ({ isEditing: false }));
+    },
     onSubmit: (values) => {
+      pendingProfileUpdate = values;
+      showAlertPopup(EDIT_PROFILE_CONFIRM_ID);
+    },
+  });
+
+  bindAlertPopupEvents(EDIT_PROFILE_CONFIRM_ID, {
+    onConfirm: () => {
+      if (!pendingProfileUpdate) return;
+      const values = pendingProfileUpdate;
+      pendingProfileUpdate = null;
       actions.onSaveProfile(values);
       actions.onChangeState(() => ({ isEditing: false }));
+    },
+    onCancel: () => {
+      pendingProfileUpdate = null;
     },
   });
 
   document.getElementById("openChangePasswordBtn")?.addEventListener("click", () => {
-    pendingPayload = null;
+    pendingPasswordPayload = null;
     openChangePasswordModal();
   });
 
   bindChangePasswordModalEvents({
     onVerifyOldPassword: actions.onVerifyOldPassword,
     onRequestConfirm: (payload) => {
-      pendingPayload = payload;
+      pendingPasswordPayload = payload;
       showAlertPopup(CHANGE_PASSWORD_CONFIRM_ID);
     },
   });
 
   bindAlertPopupEvents(CHANGE_PASSWORD_CONFIRM_ID, {
     onConfirm: () => {
-      if (!pendingPayload) return;
-      actions.onConfirmChangePassword(pendingPayload);
-      pendingPayload = null;
+      if (!pendingPasswordPayload) return;
+      actions.onConfirmChangePassword(pendingPasswordPayload);
+      pendingPasswordPayload = null;
       closeChangePasswordModal();
       document.getElementById("passwordUpdatedFeedback")?.classList.remove("hidden");
     },
     onCancel: () => {
-      pendingPayload = null;
+      pendingPasswordPayload = null;
     },
   });
 }
