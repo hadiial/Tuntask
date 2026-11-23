@@ -1,3 +1,10 @@
+export interface TaskCourseOption {
+  id: number;
+  course_name: string;
+  lecturer_name: string | null;
+  semester: string;
+}
+
 export interface TaskFormValues {
   task_title: string;
   course_name: string;
@@ -22,7 +29,26 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function renderTaskModal(courseNames: string[]): string {
+function formatCourseOptionLabel(course: TaskCourseOption): string {
+  const details = [course.lecturer_name?.trim(), course.semester?.trim()]
+    .filter(Boolean)
+    .join(" · ");
+  return details ? `${course.course_name} (${details})` : course.course_name;
+}
+
+export function renderTaskModal(courses: TaskCourseOption[]): string {
+  const hasCourses = courses.length > 0;
+  const optionsHtml = hasCourses
+    ? courses
+        .map(
+          (course) =>
+            `<option value="${escapeHtml(course.course_name)}">${escapeHtml(
+              formatCourseOptionLabel(course)
+            )}</option>`
+        )
+        .join("")
+    : `<option value="">Belum ada mata kuliah — buat dulu di menu Mata Kuliah</option>`;
+
   return `
     <div
       id="taskModalOverlay"
@@ -59,16 +85,14 @@ export function renderTaskModal(courseNames: string[]): string {
             <label for="fCourse" class="mb-1 block text-xs font-semibold text-slate-700">
               Mata Kuliah *
             </label>
-            <input
-              type="text"
+            <select
               id="fCourse"
-              list="courseListOptions"
               required
-              class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
-            />
-            <datalist id="courseListOptions">
-              ${courseNames.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("")}
-            </datalist>
+              ${!hasCourses ? "disabled" : ""}
+              class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-none disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+            >
+              ${optionsHtml}
+            </select>
           </div>
 
           <div>
@@ -142,7 +166,8 @@ export function renderTaskModal(courseNames: string[]): string {
             </button>
             <button
               type="submit"
-              class="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 cursor-pointer"
+              ${!hasCourses ? "disabled" : ""}
+              class="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             >
               Simpan
             </button>
@@ -160,7 +185,7 @@ export function showTaskModal(options: ShowTaskModalOptions): void {
   const titleEl = document.getElementById("modalHeading");
   const statusWrapper = document.getElementById("statusFieldWrapper");
   const titleInput = document.getElementById("fTitle") as HTMLInputElement | null;
-  const courseInput = document.getElementById("fCourse") as HTMLInputElement | null;
+  const courseSelect = document.getElementById("fCourse") as HTMLSelectElement | null;
   const descInput = document.getElementById("fDesc") as HTMLTextAreaElement | null;
   const assignedInput = document.getElementById("fAssigned") as HTMLInputElement | null;
   const deadlineInput = document.getElementById("fDeadline") as HTMLInputElement | null;
@@ -172,7 +197,7 @@ export function showTaskModal(options: ShowTaskModalOptions): void {
     !titleEl ||
     !statusWrapper ||
     !titleInput ||
-    !courseInput ||
+    !courseSelect ||
     !descInput ||
     !assignedInput ||
     !deadlineInput ||
@@ -184,7 +209,22 @@ export function showTaskModal(options: ShowTaskModalOptions): void {
 
   titleEl.textContent = heading;
   titleInput.value = values.task_title;
-  courseInput.value = values.course_name;
+
+  if (values.course_name) {
+    const exists = Array.from(courseSelect.options).some(
+      (opt) => opt.value === values.course_name
+    );
+    if (!exists && !courseSelect.disabled) {
+      const fallbackOpt = document.createElement("option");
+      fallbackOpt.value = values.course_name;
+      fallbackOpt.textContent = values.course_name;
+      courseSelect.prepend(fallbackOpt);
+    }
+    courseSelect.value = values.course_name;
+  } else if (courseSelect.options.length > 0) {
+    courseSelect.selectedIndex = 0;
+  }
+
   descInput.value = values.task_desc;
   assignedInput.value = values.assigned_date;
   deadlineInput.value = values.deadline;
@@ -231,7 +271,7 @@ export function bindTaskModalEvents(handlers: TaskModalHandlers): void {
 
     const values: TaskFormValues = {
       task_title: (document.getElementById("fTitle") as HTMLInputElement).value.trim(),
-      course_name: (document.getElementById("fCourse") as HTMLInputElement).value.trim(),
+      course_name: (document.getElementById("fCourse") as HTMLSelectElement).value.trim(),
       task_desc: (document.getElementById("fDesc") as HTMLTextAreaElement).value.trim(),
       assigned_date: (document.getElementById("fAssigned") as HTMLInputElement).value,
       deadline: (document.getElementById("fDeadline") as HTMLInputElement).value,

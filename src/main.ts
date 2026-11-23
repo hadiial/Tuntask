@@ -3,7 +3,7 @@ import { renderDrawer, bindDrawerEvents, type DrawerMenu } from "./components/Dr
 import { renderTopBar, bindTopBarEvents } from "./components/TopBar";
 import { renderPageHeader, bindPageHeaderEvents } from "./components/PageHeader";
 import { renderStatCardsGrid, bindStatCardsEvents, type StatCardItem } from "./components/StatCard";
-import { renderTaskTable, bindTaskTableEvents, type TaskRowItem } from "./components/TaskTable";
+import { renderTaskTable, bindTaskTableEvents, updateTaskTableBody, type TaskRowItem } from "./components/TaskTable";
 import { renderTaskModal, showTaskModal, hideTaskModal, bindTaskModalEvents, type TaskFormValues } from "./components/TaskModal";
 import { renderCoursePage, bindCoursePageEvents, createInitialCoursePageState, type CoursePageState } from "./course";
 import { renderProfilePage, bindProfilePageEvents, createInitialProfilePageState, type ProfilePageState } from "./profile";
@@ -66,6 +66,8 @@ export interface TaskRecord {
   student_id: number;
   course_id: number;
   course_name: string;
+  lecturer_name?: string | null;
+  semester?: string | null;
   task_title: string;
   task_desc: string;
   assigned_date: string;
@@ -263,7 +265,7 @@ function getFilteredTaskRows(): TaskRowItem[] {
     if (activeCardFilter === "COMPLETED" && task.status !== "Selesai") return false;
 
     if (q.length > 0) {
-      const hay = `${task.task_title} ${task.course_name} ${task.task_desc ?? ""}`.toLowerCase();
+      const hay = `${task.task_title} ${task.course_name} ${task.lecturer_name ?? ""} ${task.semester ?? ""} ${task.task_desc ?? ""}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
 
@@ -289,9 +291,19 @@ function getFilteredTaskRows(): TaskRowItem[] {
   });
 
   return sorted.map((task): TaskRowItem => {
+    const matchedCourse = courseCollection
+      .getAll()
+      .find(
+        (c) =>
+          c.id === task.course_id ||
+          c.course_name.toLowerCase() === task.course_name.toLowerCase()
+      );
+
     const normalized: TaskRecord = {
       ...task,
       id: String(task.id),
+      lecturer_name: task.lecturer_name ?? matchedCourse?.lecturer_name ?? null,
+      semester: task.semester ?? matchedCourse?.semester ?? null,
       task_desc: task.task_desc ?? "",
       assigned_date: normalizeDateOnly(task.assigned_date),
       created_at: normalizeDateOnly(task.created_at),
@@ -381,30 +393,18 @@ function openTaskModal(taskId?: string | number): void {
   }
 }
 
-async function resolveCourseId(courseName: string): Promise<number | null> {
+function resolveCourseId(courseName: string): number | null {
   const matched = courseCollection
     .getAll()
     .find((c) => c.course_name.toLowerCase() === courseName.toLowerCase());
   if (matched) return matched.id;
 
-  const created = await createCourse(currentStudent.id, {
-    course_name: courseName,
-    course_code: "",
-    lecturer_name: "",
-    semester: "2026 Ganjil",
-  });
-
-  if (!created.ok || !created.data) {
-    notifyError(created.message || "Gagal membuat mata kuliah baru.");
-    return null;
-  }
-
-  courseCollection.setAll([...courseCollection.getAll(), created.data]);
-  return created.data.id;
+  notifyError("Pilih mata kuliah yang sudah terdaftar pada menu Mata Kuliah.");
+  return null;
 }
 
 async function saveTask(values: TaskFormValues): Promise<void> {
-  const courseId = await resolveCourseId(values.course_name);
+  const courseId = resolveCourseId(values.course_name);
   if (courseId === null) return;
 
   if (editingTaskId !== null) {
@@ -527,7 +527,12 @@ async function saveCourse(
     taskCollection.setAll(
       taskCollection.getAll().map((task) =>
         task.course_id === editingCourseId
-          ? { ...task, course_name: res.data!.course_name }
+          ? {
+              ...task,
+              course_name: res.data!.course_name,
+              lecturer_name: res.data!.lecturer_name,
+              semester: res.data!.semester,
+            }
           : task
       )
     );
@@ -568,7 +573,7 @@ function renderDashboardBody(): string {
   const summary = computeDashboardSummary(taskCollection.getAll());
   const statCards = buildDashboardCards(summary);
   const taskRows = getFilteredTaskRows();
-  const courseNames = courseCollection.getAll().map((c) => c.course_name);
+  const courses = courseCollection.getAll();
 
   return `
     ${renderPageHeader({
@@ -587,7 +592,7 @@ function renderDashboardBody(): string {
       sortField,
     })}
 
-    ${renderTaskModal(courseNames)}
+    ${renderTaskModal(courses)}
     ${renderAlertPopup({
       id: TASK_CONFIRM_ID,
       title: "Konfirmasi Aksi Tugas",
@@ -772,7 +777,11 @@ function attachAppListeners(): void {
     bindTaskTableEvents({
       onSearchChange: (keyword) => {
         searchKeyword = keyword;
-        renderView();
+        updateTaskTableBody(getFilteredTaskRows(), {
+          onToggleTask: requestToggleTaskStatus,
+          onEditTask: (id) => openTaskModal(id),
+          onDeleteTask: requestDeleteTask,
+        });
       },
       onCreatedFilterChange: (value) => {
         createdFilter = value as CreatedFilter;
