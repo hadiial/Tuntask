@@ -90,7 +90,7 @@ export function bindCoursePageEvents(
         course_name: "",
         course_code: "",
         lecturer_name: "",
-        semester: "2026 Ganjil",
+        semester: "",
       },
     });
   });

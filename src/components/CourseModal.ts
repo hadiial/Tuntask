@@ -35,13 +35,13 @@ export function renderCourseModal(): string {
         <form id="courseModalForm" class="space-y-3">
           <div>
             <label for="cName" class="mb-1 block text-xs font-semibold text-slate-700">
-              Nama Mata Kuliah *
+              Mata Kuliah *
             </label>
             <input
               type="text"
               id="cName"
               required
-              placeholder="Contoh: Pengembangan Aplikasi Web"
+              placeholder="Nama Mata Kuliah"
               class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
             />
           </div>
@@ -54,7 +54,7 @@ export function renderCourseModal(): string {
               <input
                 type="text"
                 id="cCode"
-                placeholder="Contoh: IF-501"
+                placeholder="Kode Mata Kuliah"
                 class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
               />
             </div>
@@ -67,7 +67,7 @@ export function renderCourseModal(): string {
                 type="text"
                 id="cSemester"
                 required
-                placeholder="Contoh: 2026 Ganjil"
+                placeholder="..."
                 class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-red-500 focus:outline-none"
               />
             </div>
