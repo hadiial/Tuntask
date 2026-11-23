@@ -6,8 +6,7 @@ import type { ChangePasswordPayload } from "./profile";
 import type { LoginCredentials } from "./login";
 import type { RegisterPayload } from "./register";
 
-const API_BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "";
 
 interface ApiResult<T> {
   ok: boolean;
