@@ -1,3 +1,5 @@
+// API client helper untuk aplikasi Tuntask (branch utama develop)
+
 import type { Student, Course, TaskRecord, TaskStatus } from "./main";
 import type { CourseFormValues } from "./components/CourseModal";
 import type { TaskFormValues } from "./components/TaskModal";
